@@ -169,6 +169,13 @@ void print_branch_stats()
     (100.0*ooo_cpu[i]->total_branch_types[7])/(ooo_cpu[i]->num_retired -
     ooo_cpu[i]->begin_sim_instr) << "%" << endl << endl;
     */
+    cout << "Branch type Misses" << endl;
+    cout << "BRANCH_DIRECT_JUMP MISSES: " << ooo_cpu[i]->branch_type_misses[1] << endl;
+    cout << "BRANCH_INDIRECT MISSES: " << ooo_cpu[i]->branch_type_misses[2] << endl;
+    cout << "BRANCH_CONDITIONAL MISSES: " << ooo_cpu[i]->branch_type_misses[3] << endl;
+    cout << "BRANCH_DIRECT_CALL MISSES: " << ooo_cpu[i]->branch_type_misses[4] << endl;
+    cout << "BRANCH_INDIRECT_CALL MISSES: " << ooo_cpu[i]->branch_type_misses[5] << endl;
+    cout << "BRANCH_RETURN MISSES: " << ooo_cpu[i]->branch_type_misses[6] << endl;
 
     cout << "Branch type MPKI" << endl;
     cout << "BRANCH_DIRECT_JUMP: " << (1000.0 * ooo_cpu[i]->branch_type_misses[1] / (ooo_cpu[i]->num_retired - ooo_cpu[i]->begin_sim_instr)) << endl;
@@ -440,6 +447,18 @@ int main(int argc, char** argv)
 
         ooo_cpu[i]->last_sim_instr = ooo_cpu[i]->num_retired;
         ooo_cpu[i]->last_sim_cycle = ooo_cpu[i]->current_cycle;
+
+        // Added by Kaifeng Xu, print middle stats
+        for (auto it = caches.rbegin(); it != caches.rend(); ++it)
+          record_roi_stats(i, *it);
+        for (uint32_t i = 0; i < NUM_CPUS; i++) {
+          cout << endl << "CPU " << i << " cumulative IPC: " << ((float)ooo_cpu[i]->finish_sim_instr / ooo_cpu[i]->finish_sim_cycle);
+          cout << " instructions: " << ooo_cpu[i]->finish_sim_instr << " cycles: " << ooo_cpu[i]->finish_sim_cycle << endl;
+          for (auto it = caches.rbegin(); it != caches.rend(); ++it)
+            print_roi_stats(i, *it);
+        }
+        print_branch_stats();
+        // End Kaifeng Xu
       }
 
       // check for warmup

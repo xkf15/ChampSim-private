@@ -57,6 +57,8 @@ ooo_model_instr tracereader::read_single_instr()
     open(trace_string);
   }
 
+  // Added by Kaifeng Xu
+  // std::cout << "ip: " << std::hex << trace_read_instr.ip << ", is_branch: " << std::dec << trace_read_instr.is_branch << std::endl;
   // copy the instruction into the performance model's instruction format
   ooo_model_instr retval(cpu, trace_read_instr);
   return retval;

@@ -31,6 +31,10 @@ struct ooo_model_instr {
   bool is_branch = 0, is_memory = 0, branch_taken = 0, branch_mispredicted = 0, source_added[NUM_INSTR_SOURCES] = {},
        destination_added[NUM_INSTR_DESTINATIONS_SPARC] = {};
 
+  // Added by Kaifeng Xu
+  bool is_btb_miss = 0;
+  // End
+
   uint8_t asid[2] = {std::numeric_limits<uint8_t>::max(), std::numeric_limits<uint8_t>::max()};
 
   uint8_t branch_type = NOT_BRANCH;

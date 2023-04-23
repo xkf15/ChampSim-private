@@ -217,7 +217,13 @@ void O3_CPU::init_instruction(ooo_model_instr arch_instr)
     // call code prefetcher every time the branch predictor is used
     impl_prefetcher_branch_operate(arch_instr.ip, arch_instr.branch_type, predicted_branch_target);
 
-    if (predicted_branch_target != arch_instr.branch_target) {
+    // Changed by Kaifeng Xu
+    // if (predicted_branch_target != arch_instr.branch_target) {
+    if (branch_prediction != arch_instr.branch_taken) {
+      //   arch_instr.is_btb_miss = 0;
+      // else
+      //   arch_instr.is_btb_miss = 1;
+    // End of Change
       branch_mispredictions++;
       total_rob_occupancy_at_branch_mispredict += ROB.occupancy();
       branch_type_misses[arch_instr.branch_type]++;
@@ -424,7 +430,12 @@ void O3_CPU::decode_instruction()
         // again at execute
         db_entry.branch_mispredicted = 0;
         // pay misprediction penalty
-        fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
+        // Changed by Kaifeng Xu, assume btb miss penalty is 0 cycles
+        // if (db_entry.is_btb_miss == 1)
+        //   fetch_resume_cycle = current_cycle + 0;
+        // else
+          fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
+        // End of Change
       }
     }
 
@@ -937,7 +948,13 @@ void O3_CPU::do_complete_execution(champsim::circular_buffer<ooo_model_instr>::i
   }
 
   if (rob_it->branch_mispredicted)
-    fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
+    // Changed by Kaifeng Xu
+    // if (rob_it->is_btb_miss == 1){
+    //   fetch_resume_cycle = current_cycle + 0;
+    // } else {
+      fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
+    // }
+    // end of change
 }
 
 void O3_CPU::complete_inflight_instruction()
