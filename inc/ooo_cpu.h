@@ -28,6 +28,13 @@ public:
 class O3_CPU : public champsim::operable
 {
 public:
+  // Added by Kaifeng Xu
+  uint64_t kernel_insn = 0;
+  uint64_t kernel_data = 0;
+  uint64_t user_insn = 0;
+  uint64_t user_data = 0;
+  // End
+
   uint32_t cpu = 0;
 
   // instruction

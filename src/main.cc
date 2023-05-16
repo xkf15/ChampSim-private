@@ -452,6 +452,7 @@ int main(int argc, char** argv)
         for (auto it = caches.rbegin(); it != caches.rend(); ++it)
           record_roi_stats(i, *it);
         for (uint32_t i = 0; i < NUM_CPUS; i++) {
+          cout << endl << "CPU " << i << " Kernel: " << "K-I " <<  ooo_cpu[i]->kernel_insn << " K-D " << ooo_cpu[i]->kernel_data << " U-I " << ooo_cpu[i]->user_insn << " U-D " << ooo_cpu[i]->user_data;
           cout << endl << "CPU " << i << " cumulative IPC: " << ((float)ooo_cpu[i]->finish_sim_instr / ooo_cpu[i]->finish_sim_cycle);
           cout << " instructions: " << ooo_cpu[i]->finish_sim_instr << " cycles: " << ooo_cpu[i]->finish_sim_cycle << endl;
           for (auto it = caches.rbegin(); it != caches.rend(); ++it)

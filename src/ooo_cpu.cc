@@ -1136,6 +1136,17 @@ void O3_CPU::retire_rob()
     // release ROB entry
     DP(if (warmup_complete[cpu]) { cout << "[ROB] " << __func__ << " instr_id: " << ROB.front().instr_id << " is retired" << endl; });
 
+    // Added by Kaifeng Xu, count kernels
+    if (ROB.front().is_kernel) {
+      kernel_insn++;
+      if (ROB.front().is_memory)
+        kernel_data++;
+    } else {
+      user_insn++;
+      if (ROB.front().is_memory)
+        user_data++;
+    }
+    // End Kaifeng Xu
     ROB.pop_front();
     completed_executions--;
     num_retired++;

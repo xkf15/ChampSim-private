@@ -20,6 +20,7 @@
 
 #define EVENT_ID_INSN 63
 #define EVENT_ID_DATA 64
+#define EVENT_ID_NOP 65
 
 struct QEMU_tracefile_header {
     uint64_t header_event_id;
@@ -53,6 +54,12 @@ struct QEMU_trace_data {
     uint64_t length;
     uint64_t seg_states;
     uint64_t cr3;
+};
+
+struct QEMU_trace_nop {
+    uint64_t byte0;
+    uint64_t byte1;
+    uint64_t byte2;
 };
 
 // Added by Kaifeng Xu

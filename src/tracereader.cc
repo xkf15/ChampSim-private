@@ -89,16 +89,18 @@ void tracereader::open(std::string trace_string)
     std::cout << "Trace Header:" << header.header_event_id << "," << header.header_magic << "," << header.header_version << std::endl;
 
     // Skip trace event mappings in trace file, totally 134046 bytes, remember to change this if trace events changes
-    char event_mappings[134046];
-    fread(&event_mappings, 134046, 1, trace_file);
+    char event_mappings[134081];
+    fread(&event_mappings, 134081, 1, trace_file);
     // Check first event
     QEMU_event_header event_header;
-    if (!fread(&event_header, sizeof(QEMU_event_header), 1, trace_file)) {
-      // reached end of file for this trace
-      std::cout << "*** Reached end of trace: " << trace_string << std::endl;
-      exit(1);
-    }
-    // first event should be instruction
+    fread(&event_header, sizeof(QEMU_event_header), 1, trace_file);
+    QEMU_trace_nop trace_nop;
+    fread(&trace_nop, sizeof(QEMU_trace_nop), 1, trace_file);
+    std::cout << "Marker: " << trace_nop.byte0 << " " << trace_nop.byte1 << " " << trace_nop.byte2 << std::endl;
+    // first event should be begin marker
+    assert((event_header.event == EVENT_ID_NOP) && (trace_nop.byte0 == 0xbe));
+    // Follow that begin marker, there should be an instruction event
+    fread(&event_header, sizeof(QEMU_event_header), 1, trace_file);
     assert(event_header.event == EVENT_ID_INSN);
   }
   // End Kaifeng Xu
@@ -250,12 +252,38 @@ ooo_model_instr qemu_tracereader::read_single_instr_qemutrace()
           std::cout << "*** Reached end of trace: " << trace_string << std::endl;
           exit(1);
         }
+      } else if (header.event == EVENT_ID_NOP) {
+        QEMU_trace_nop trace_nop;
+        if (!fread(&trace_nop, sizeof(QEMU_trace_nop), 1, trace_file)) {
+          // reached end of file for this trace
+          std::cout << "*** Reached end of trace: " << trace_string << std::endl;
+          exit(1);
+        }
+        std::cout << "Marker: " << trace_nop.byte0 << " " << trace_nop.byte1 << " " << trace_nop.byte2 << std::endl;
+      } else {
+        assert(0); // should not reach this
       }
     }
 
     // Return
     ooo_model_instr retval(cpu, trace_read_instr, trace_data);
     return retval;
+  } else if (header.event == EVENT_ID_NOP) {
+    // Handle marker instructions
+    QEMU_trace_nop trace_nop;
+    if (!fread(&trace_nop, sizeof(QEMU_trace_nop), 1, trace_file)) {
+      // reached end of file for this trace
+      std::cout << "*** Reached end of trace: " << trace_string << std::endl;
+      exit(1);
+    }
+    std::cout << "Marker: " << trace_nop.byte0 << " " << trace_nop.byte1 << " " << trace_nop.byte2 << std::endl;
+    // See if next trace line is instruction
+    if (!fread(&header, sizeof(QEMU_event_header), 1, trace_file)) {
+      // reached end of file for this trace
+      std::cout << "*** Reached end of trace: " << trace_string << std::endl;
+      exit(1);
+    }
+    assert(header.event == EVENT_ID_INSN);
   } else {
     assert(header.event == EVENT_ID_INSN); // should be insn, or bug
   }

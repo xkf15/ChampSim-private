@@ -34,6 +34,7 @@ struct ooo_model_instr {
 
   // Added by Kaifeng Xu
   bool is_btb_miss = 0;
+  bool is_kernel = true;
   // End
 
   uint8_t asid[2] = {std::numeric_limits<uint8_t>::max(), std::numeric_limits<uint8_t>::max()};
@@ -98,8 +99,9 @@ struct ooo_model_instr {
     this->branch_target = instr.target_vaddr;
     // this->branch_taken = ?; not decided here
 
-    asid[0] = cpu;
-    asid[1] = cpu;
+    this->asid[0] = instr.cr3 & 0xff;
+    this->asid[1] = (instr.cr3 >> 8) & 0xf;
+    this->is_kernel = (instr.seg_states < 3);
   }
 
   ooo_model_instr(uint8_t cpu, QEMU_trace_insn instr, QEMU_trace_data trace_data)
@@ -116,8 +118,9 @@ struct ooo_model_instr {
       this->source_memory[0] = trace_data.vaddr;
     }
 
-    asid[0] = cpu;
-    asid[1] = cpu;
+    this->asid[0] = instr.cr3 & 0xff;
+    this->asid[1] = (instr.cr3 >> 8) & 0xf;
+    this->is_kernel = (instr.seg_states < 3);
   }
 
 };
