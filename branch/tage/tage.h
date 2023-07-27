@@ -41,6 +41,7 @@ private:
     int pred_comp, alt_comp; // Provider and alternate component of last branch PC
     int STRONG; //Strength of provider prediction counter of last branch PC
 
+    FILE *fptr;
     void store_tables();
     void load_tables();
 
@@ -61,6 +62,50 @@ public:
     Tage();
     ~Tage();
 };
+
+void Tage::store_tables()
+{
+    // Store current states to a file
+    fptr = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/test.txt", "w");
+    // Bimodal table
+    int i = 0;
+    for(; i < TAGE_BIMODAL_TABLE_SIZE ; i++){
+        fprintf(fptr, "%02x ", bimodal_table[i]);
+    }
+    fprintf(fptr, "\n");
+    // tage_predictor_table_entry
+    for(i = 0; i < TAGE_NUM_COMPONENTS ; i++){
+        int j = 0;
+        for(; j < (1 << TAGE_MAX_INDEX_BITS) ; j++){
+            fprintf(fptr, "%02x ", predictor_table[i][j].ctr);
+            fprintf(fptr, "%04x ", predictor_table[i][j].tag);
+            fprintf(fptr, "%02x ", predictor_table[i][j].useful);
+        }
+    }
+    fprintf(fptr, "\n");
+    fclose(fptr);
+}
+
+void Tage:load_tables()
+{
+    // Load current states from a file
+    fptr = open("/tigress/kaifengx/ChampSim/branch/tage/states/test.txt", "r");
+    // Bimodal table
+    int i = 0;
+    for(; i < TAGE_BIMODAL_TABLE_SIZE ; i++){
+        fscanf(fptr, "%02x ", bimodal_table[i]);
+    }
+    // tage_predictor_table_entry
+    for(i = 0; i < TAGE_NUM_COMPONENTS ; i++){
+        int j = 0;
+        for(; j < (1 << TAGE_MAX_INDEX_BITS) ; j++){
+            fscanf(fptr, "%02x ", predictor_table[i][j].ctr);
+            fscanf(fptr, "%04x ", predictor_table[i][j].tag);
+            fscanf(fptr, "%02x ", predictor_table[i][j].useful);
+        }
+    }
+    fclose(fptr);
+}
 
 void Tage::init()
 {
