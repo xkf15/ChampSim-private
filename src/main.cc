@@ -530,3 +530,121 @@ int main(int argc, char** argv)
 
   return 0;
 }
+
+int main(int argc, char** argv)
+{
+  // interrupt signal hanlder
+  struct sigaction sigIntHandler;
+  sigIntHandler.sa_handler = signal_handler;
+  sigemptyset(&sigIntHandler.sa_mask);
+  sigIntHandler.sa_flags = 0;
+  sigaction(SIGINT, &sigIntHandler, NULL);
+
+  cout << endl << "*** ChampSim Multicore Out-of-Order Simulator ***" << endl << endl;
+
+  // initialize knobs
+  uint8_t show_heartbeat = 1;
+
+  // check to see if knobs changed using getopt_long()
+  int traces_encountered = 0;
+  static struct option long_options[] = {{"warmup_instructions", required_argument, 0, 'w'},
+                                         {"simulation_instructions", required_argument, 0, 'i'},
+                                         {"hide_heartbeat", no_argument, 0, 'h'},
+                                         {"cloudsuite", no_argument, 0, 'c'},
+                                         {"traces", no_argument, &traces_encountered, 1},
+                                         {0, 0, 0, 0}};
+
+  int c;
+  while ((c = getopt_long_only(argc, argv, "w:i:hc", long_options, NULL)) != -1 && !traces_encountered) {
+    switch (c) {
+    case 'w':
+      warmup_instructions = atol(optarg);
+      break;
+    case 'i':
+      simulation_instructions = atol(optarg);
+      break;
+    case 'h':
+      show_heartbeat = 0;
+      break;
+    case 'c':
+      knob_cloudsuite = 1;
+      MAX_INSTR_DESTINATIONS = NUM_INSTR_DESTINATIONS_SPARC;
+      break;
+    case 0:
+      break;
+    default:
+      abort();
+    }
+  }
+
+  cout << "Warmup Instructions: " << warmup_instructions << endl;
+  cout << "Simulation Instructions: " << simulation_instructions << endl;
+  cout << "Number of CPUs: " << NUM_CPUS << endl;
+
+  long long int dram_size = DRAM_CHANNELS * DRAM_RANKS * DRAM_BANKS * DRAM_ROWS * DRAM_COLUMNS * BLOCK_SIZE / 1024 / 1024; // in MiB
+  std::cout << "Off-chip DRAM Size: ";
+  if (dram_size > 1024)
+    std::cout << dram_size / 1024 << " GiB";
+  else
+    std::cout << dram_size << " MiB";
+  std::cout << " Channels: " << DRAM_CHANNELS << " Width: " << 8 * DRAM_CHANNEL_WIDTH << "-bit Data Rate: " << DRAM_IO_FREQ << " MT/s" << std::endl;
+
+  std::cout << std::endl;
+  std::cout << "VirtualMemory physical capacity: " << std::size(vmem.ppage_free_list) * vmem.page_size;
+  std::cout << " num_ppages: " << std::size(vmem.ppage_free_list) << std::endl;
+  std::cout << "VirtualMemory page size: " << PAGE_SIZE << " log2_page_size: " << LOG2_PAGE_SIZE << std::endl;
+
+  std::cout << std::endl;
+  for (int i = optind; i < argc; i++) {
+    std::cout << "CPU " << traces.size() << " runs " << argv[i] << std::endl;
+
+    traces.push_back(get_tracereader(argv[i], traces.size(), knob_cloudsuite));
+
+    if (traces.size() > NUM_CPUS) {
+      printf("\n*** Too many traces for the configured number of cores ***\n\n");
+      assert(0);
+    }
+  }
+
+  if (traces.size() != NUM_CPUS) {
+    printf("\n*** Not enough traces for the configured number of cores ***\n\n");
+    assert(0);
+  }
+  // end trace file setup
+
+  // SHARED CACHE
+  for (O3_CPU* cpu : ooo_cpu) {
+    cpu->initialize_core();
+  }
+
+  for (auto it = caches.rbegin(); it != caches.rend(); ++it) {
+    (*it)->impl_prefetcher_initialize();
+    (*it)->impl_replacement_initialize();
+  }
+
+  int num_branch = 0;
+  int mispredict = 0;
+  for(int i= 0; i < (warmup_instructions + simulation_instructions); i++){
+      // simulation entry point
+      ooo_model_instr arch_instr = traces[0]->get();
+      if (arch_instr.is_branch) {
+          num_branch ++;
+          // Perform branch predictor
+          std::pair<uint64_t, uint8_t> btb_result = impl_btb_prediction(arch_instr.ip, arch_instr.branch_type);
+          uint64_t predicted_branch_target = btb_result.first;
+          uint8_t always_taken = btb_result.second;
+          uint8_t branch_prediction = impl_predict_branch(arch_instr.ip, predicted_branch_target, always_taken, arch_instr.branch_type);
+          if ((branch_prediction == 0) && (always_taken == 0)) {
+              predicted_branch_target = 0;
+          }
+          if (branch_prediction == != arch_instr.branch_taken){
+              mispredict ++;
+          }
+          impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
+          impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
+      }
+      if(i % STAT_PRINTING_PERIOD == 0){
+         printf("Insn: %d, Branch: %d, Mispredict: %d\n", i, num_branch, mispredict); 
+      }
+  }
+}
