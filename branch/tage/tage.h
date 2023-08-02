@@ -86,10 +86,10 @@ void Tage::store_tables()
     fclose(fptr);
 }
 
-void Tage:load_tables()
+void Tage::load_tables()
 {
     // Load current states from a file
-    fptr = open("/tigress/kaifengx/ChampSim/branch/tage/states/test.txt", "r");
+    fptr = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/test.txt", "r");
     // Bimodal table
     int i = 0;
     for(; i < TAGE_BIMODAL_TABLE_SIZE ; i++){
