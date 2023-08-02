@@ -42,6 +42,26 @@ void O3_CPU::initialize_core()
   impl_btb_initialize();
 }
 
+void O3_CPU::perform_bp(ooo_model_instr arch_instr, int *num_branch, int *mispredict)
+{
+    if (arch_instr.is_branch) {
+        (*num_branch)++;
+        // Perform branch predictor
+        std::pair<uint64_t, uint8_t> btb_result = impl_btb_prediction(arch_instr.ip, arch_instr.branch_type);
+        uint64_t predicted_branch_target = btb_result.first;
+        uint8_t always_taken = btb_result.second;
+        uint8_t branch_prediction = impl_predict_branch(arch_instr.ip, predicted_branch_target, always_taken, arch_instr.branch_type);
+        if ((branch_prediction == 0) && (always_taken == 0)) {
+            predicted_branch_target = 0;
+        }
+        if (branch_prediction != arch_instr.branch_taken){
+            (*mispredict)++;
+        }
+        impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
+        impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
+    }
+}
+
 void O3_CPU::init_instruction(ooo_model_instr arch_instr)
 {
   instrs_to_read_this_cycle--;
@@ -218,7 +238,10 @@ void O3_CPU::init_instruction(ooo_model_instr arch_instr)
     impl_prefetcher_branch_operate(arch_instr.ip, arch_instr.branch_type, predicted_branch_target);
 
     // Changed by Kaifeng Xu
+    cout << arch_instr.branch_taken;
     // if (predicted_branch_target != arch_instr.branch_target) {
+    // Ideal branch predictor, set branch_prediction to always correct
+    branch_prediction = arch_instr.branch_taken;
     if (branch_prediction != arch_instr.branch_taken) {
       //   arch_instr.is_btb_miss = 0;
       // else

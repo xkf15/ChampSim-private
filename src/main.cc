@@ -310,7 +310,7 @@ void signal_handler(int signal)
   exit(1);
 }
 
-int main(int argc, char** argv)
+int main2(int argc, char** argv)
 {
   // interrupt signal hanlder
   struct sigaction sigIntHandler;
@@ -624,25 +624,9 @@ int main(int argc, char** argv)
 
   int num_branch = 0;
   int mispredict = 0;
+  // simulation entry point
   for(int i= 0; i < (warmup_instructions + simulation_instructions); i++){
-      // simulation entry point
-      ooo_model_instr arch_instr = traces[0]->get();
-      if (arch_instr.is_branch) {
-          num_branch ++;
-          // Perform branch predictor
-          std::pair<uint64_t, uint8_t> btb_result = impl_btb_prediction(arch_instr.ip, arch_instr.branch_type);
-          uint64_t predicted_branch_target = btb_result.first;
-          uint8_t always_taken = btb_result.second;
-          uint8_t branch_prediction = impl_predict_branch(arch_instr.ip, predicted_branch_target, always_taken, arch_instr.branch_type);
-          if ((branch_prediction == 0) && (always_taken == 0)) {
-              predicted_branch_target = 0;
-          }
-          if (branch_prediction == != arch_instr.branch_taken){
-              mispredict ++;
-          }
-          impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
-          impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
-      }
+      ooo_cpu[0]->perform_bp(traces[0]->get(), &num_branch, &mispredict);
       if(i % STAT_PRINTING_PERIOD == 0){
          printf("Insn: %d, Branch: %d, Mispredict: %d\n", i, num_branch, mispredict); 
       }

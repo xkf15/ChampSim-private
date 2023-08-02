@@ -132,6 +132,10 @@ public:
 
   int prefetch_code_line(uint64_t pf_v_addr);
 
+  // Added by Kaifeng Xu
+  void perform_bp(ooo_model_instr arch_instr, int *num_branch, int *mispredict);
+  // Kaifeng Xu
+
 #include "ooo_cpu_modules.inc"
 
   const bpred_t bpred_type;
