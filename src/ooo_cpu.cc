@@ -42,7 +42,7 @@ void O3_CPU::initialize_core()
   impl_btb_initialize();
 }
 
-void O3_CPU::perform_bp(ooo_model_instr arch_instr, int *num_branch, int *mispredict)
+void O3_CPU::perform_bp(ooo_model_instr arch_instr, long *num_branch, long *mispredict)
 {
     if (arch_instr.is_branch) {
         (*num_branch)++;

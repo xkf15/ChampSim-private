@@ -35,6 +35,10 @@ extern std::array<champsim::operable*, NUM_OPERABLES> operables;
 
 std::vector<tracereader*> traces;
 
+// Added by Kaifeng Xu
+char bp_states_init_fname[256];
+// End Kaifeng Xu
+
 uint64_t champsim::deprecated_clock_cycle::operator[](std::size_t cpu_idx)
 {
   static bool deprecate_printed = false;
@@ -551,11 +555,12 @@ int main(int argc, char** argv)
                                          {"simulation_instructions", required_argument, 0, 'i'},
                                          {"hide_heartbeat", no_argument, 0, 'h'},
                                          {"cloudsuite", no_argument, 0, 'c'},
+                                         {"bp_states", required_argument, 0, 'b'},
                                          {"traces", no_argument, &traces_encountered, 1},
                                          {0, 0, 0, 0}};
 
   int c;
-  while ((c = getopt_long_only(argc, argv, "w:i:hc", long_options, NULL)) != -1 && !traces_encountered) {
+  while ((c = getopt_long_only(argc, argv, "w:i:hcb:", long_options, NULL)) != -1 && !traces_encountered) {
     switch (c) {
     case 'w':
       warmup_instructions = atol(optarg);
@@ -569,6 +574,10 @@ int main(int argc, char** argv)
     case 'c':
       knob_cloudsuite = 1;
       MAX_INSTR_DESTINATIONS = NUM_INSTR_DESTINATIONS_SPARC;
+      break;
+    case 'b':
+      strcpy(bp_states_init_fname, optarg);
+      printf("BP: %s\n", bp_states_init_fname);
       break;
     case 0:
       break;
@@ -622,13 +631,15 @@ int main(int argc, char** argv)
     (*it)->impl_replacement_initialize();
   }
 
-  int num_branch = 0;
-  int mispredict = 0;
+  long num_branch = 0;
+  long mispredict = 0;
   // simulation entry point
-  for(int i= 0; i < (warmup_instructions + simulation_instructions); i++){
+  int i = 0;
+  for(; i < (warmup_instructions + simulation_instructions); i++){
       ooo_cpu[0]->perform_bp(traces[0]->get(), &num_branch, &mispredict);
       if(i % STAT_PRINTING_PERIOD == 0){
-         printf("Insn: %d, Branch: %d, Mispredict: %d\n", i, num_branch, mispredict); 
+         printf("Insn: %d, Branch: %d, Mispredict: %d\n", i+1, num_branch, mispredict); 
       }
   }
+  printf("FinishBP! Insn: %d, Branch: %d, Mispredict: %d\n", i, num_branch, mispredict); 
 }
