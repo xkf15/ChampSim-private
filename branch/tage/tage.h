@@ -1,4 +1,6 @@
 #include "ooo_cpu.h"
+#include <cstring>
+
 
 #define Tag uint16_t
 #define Index uint16_t
@@ -42,8 +44,6 @@ private:
     int STRONG; //Strength of provider prediction counter of last branch PC
 
     FILE *fptr;
-    void store_tables();
-    void load_tables();
 
 public:
     void init();  // initialise the member variables
@@ -59,14 +59,27 @@ public:
     Path get_path_history_hash(int component);   // hepoer hash function to compress the path history
     History get_compressed_global_history(int inSize, int outSize); // Compress global history of last 'inSize' branches into 'outSize' by wrapping the history
 
+    void store_tables(long insn_count);
+    void load_tables(long insn_count);
+
     Tage();
     ~Tage();
 };
 
-void Tage::store_tables()
+void Tage::store_tables(long insn_count)
 {
     // Store current states to a file
-    fptr = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/test.txt", "w");
+    char st_fname[100];
+    char insn_str[20];
+    char iter_str[10];
+    strcpy(st_fname, bp_states_init_fname);
+    sprintf(insn_str, "%ld", insn_count);
+    sprintf(iter_str, "%d", iteration);
+    strcat(st_fname, insn_str);
+    strcat(st_fname, "-v");
+    strcat(st_fname, iter_str);
+    printf("Output File Name: %s\n", st_fname);
+    fptr = fopen(st_fname, "w");
     // Bimodal table
     int i = 0;
     for(; i < TAGE_BIMODAL_TABLE_SIZE ; i++){
@@ -81,30 +94,43 @@ void Tage::store_tables()
             fprintf(fptr, "%04x ", predictor_table[i][j].tag);
             fprintf(fptr, "%02x ", predictor_table[i][j].useful);
         }
+        fprintf(fptr, "\n");
     }
-    fprintf(fptr, "\n");
     fclose(fptr);
+    printf("Finish Table Store\n");
 }
 
-void Tage::load_tables()
+void Tage::load_tables(long insn_count)
 {
     // Load current states from a file
-    fptr = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/test.txt", "r");
+    char ld_fname[100];
+    char insn_str[20];
+    char iter_str[10];
+    strcpy(ld_fname, bp_states_init_fname);
+    sprintf(insn_str, "%ld", insn_count);
+    sprintf(iter_str, "%d", iteration - 1);
+    strcat(ld_fname, insn_str);
+    strcat(ld_fname, "-v");
+    strcat(ld_fname, iter_str);
+    printf("Input File Name: %s\n", ld_fname);
+    fptr = fopen(ld_fname, "r");
     // Bimodal table
     int i = 0;
     for(; i < TAGE_BIMODAL_TABLE_SIZE ; i++){
-        fscanf(fptr, "%02x ", bimodal_table[i]);
+        fscanf(fptr, "%02x ", &bimodal_table[i]);
     }
+    printf("Finish Bimodal Load\n");
     // tage_predictor_table_entry
     for(i = 0; i < TAGE_NUM_COMPONENTS ; i++){
         int j = 0;
         for(; j < (1 << TAGE_MAX_INDEX_BITS) ; j++){
-            fscanf(fptr, "%02x ", predictor_table[i][j].ctr);
-            fscanf(fptr, "%04x ", predictor_table[i][j].tag);
-            fscanf(fptr, "%02x ", predictor_table[i][j].useful);
+            fscanf(fptr, "%02x ", &predictor_table[i][j].ctr);
+            fscanf(fptr, "%04x ", &predictor_table[i][j].tag);
+            fscanf(fptr, "%02x ", &predictor_table[i][j].useful);
         }
     }
     fclose(fptr);
+    printf("Finish Table Load\n");
 }
 
 void Tage::init()
@@ -136,6 +162,9 @@ void Tage::init()
     }
 
     num_branches = 0;
+
+    // Kaifeng Xu
+    // load_tables();
 }
 
 uint8_t Tage::get_prediction(uint64_t ip, int comp)

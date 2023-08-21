@@ -16,6 +16,7 @@ using namespace std;
 
 // Added by Kaifeng Xu
 extern char bp_states_init_fname[256];
+extern int iteration;
 // End Kaifeng Xu
 
 class CACHE;
@@ -138,6 +139,8 @@ public:
 
   // Added by Kaifeng Xu
   void perform_bp(ooo_model_instr arch_instr, long *num_branch, long *mispredict);
+  void bp_store_states(long insn_count);
+  void bp_load_states(long insn_count);
   // Kaifeng Xu
 
 #include "ooo_cpu_modules.inc"

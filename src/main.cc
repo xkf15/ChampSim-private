@@ -37,6 +37,7 @@ std::vector<tracereader*> traces;
 
 // Added by Kaifeng Xu
 char bp_states_init_fname[256];
+int iteration;
 // End Kaifeng Xu
 
 uint64_t champsim::deprecated_clock_cycle::operator[](std::size_t cpu_idx)
@@ -556,11 +557,12 @@ int main(int argc, char** argv)
                                          {"hide_heartbeat", no_argument, 0, 'h'},
                                          {"cloudsuite", no_argument, 0, 'c'},
                                          {"bp_states", required_argument, 0, 'b'},
+                                         {"iteration", required_argument, 0, 'n'},
                                          {"traces", no_argument, &traces_encountered, 1},
                                          {0, 0, 0, 0}};
 
   int c;
-  while ((c = getopt_long_only(argc, argv, "w:i:hcb:", long_options, NULL)) != -1 && !traces_encountered) {
+  while ((c = getopt_long_only(argc, argv, "w:i:hcb:n:", long_options, NULL)) != -1 && !traces_encountered) {
     switch (c) {
     case 'w':
       warmup_instructions = atol(optarg);
@@ -578,6 +580,9 @@ int main(int argc, char** argv)
     case 'b':
       strcpy(bp_states_init_fname, optarg);
       printf("BP: %s\n", bp_states_init_fname);
+      break;
+    case 'n':
+      iteration = atoi(optarg);
       break;
     case 0:
       break;
@@ -634,12 +639,19 @@ int main(int argc, char** argv)
   long num_branch = 0;
   long mispredict = 0;
   // simulation entry point
-  int i = 0;
+  long i = 0;
   for(; i < (warmup_instructions + simulation_instructions); i++){
       ooo_cpu[0]->perform_bp(traces[0]->get(), &num_branch, &mispredict);
       if(i % STAT_PRINTING_PERIOD == 0){
-         printf("Insn: %d, Branch: %d, Mispredict: %d\n", i+1, num_branch, mispredict); 
+          printf("Insn: %ld Branch: %ld Mispredict: %ld \n", i+1, num_branch, mispredict); 
+          // Need to store the states
+          ooo_cpu[0]->bp_store_states(i);
+          // Need to load the states
+          if(iteration > 0){
+              if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
+                  ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
+          }
       }
   }
-  printf("FinishBP! Insn: %d, Branch: %d, Mispredict: %d\n", i, num_branch, mispredict); 
+  printf("FinishBP! Insn: %ld Branch: %ld Mispredict: %ld \n", i, num_branch, mispredict); 
 }

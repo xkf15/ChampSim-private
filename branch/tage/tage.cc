@@ -18,3 +18,13 @@ void O3_CPU::last_branch_result(uint64_t ip, uint64_t branch_target, uint8_t tak
 {
     tage_predictor[cpu].update(ip, taken);
 }
+
+void O3_CPU::bp_store_states(long insn_count)
+{
+    tage_predictor[cpu].store_tables(insn_count);
+}
+
+void O3_CPU::bp_load_states(long insn_count)
+{
+    tage_predictor[cpu].load_tables(insn_count);
+}
