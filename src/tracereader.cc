@@ -91,6 +91,8 @@ void tracereader::open(std::string trace_string)
     // Skip trace event mappings in trace file, totally 134046 bytes, remember to change this if trace events changes
     char event_mappings[134081];
     fread(&event_mappings, 134081, 1, trace_file);
+    // char event_mappings[134046];
+    // fread(&event_mappings, 134046, 1, trace_file);
     // Check first event
     QEMU_event_header event_header;
     fread(&event_header, sizeof(QEMU_event_header), 1, trace_file);

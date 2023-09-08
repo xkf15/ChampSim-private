@@ -17,6 +17,8 @@ using namespace std;
 // Added by Kaifeng Xu
 extern char bp_states_init_fname[256];
 extern int iteration;
+extern uint64_t pc_his[1000];
+extern long int loaded_bp_insn;
 // End Kaifeng Xu
 
 class CACHE;
@@ -138,7 +140,7 @@ public:
   int prefetch_code_line(uint64_t pf_v_addr);
 
   // Added by Kaifeng Xu
-  void perform_bp(ooo_model_instr arch_instr, long *num_branch, long *mispredict);
+  void perform_bp(long insn_count, ooo_model_instr arch_instr, long *num_branch, long *mispredict);
   void bp_store_states(long insn_count);
   void bp_load_states(long insn_count);
   // Kaifeng Xu

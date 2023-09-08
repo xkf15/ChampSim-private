@@ -38,6 +38,7 @@ std::vector<tracereader*> traces;
 // Added by Kaifeng Xu
 char bp_states_init_fname[256];
 int iteration;
+uint64_t pc_his[1000];
 // End Kaifeng Xu
 
 uint64_t champsim::deprecated_clock_cycle::operator[](std::size_t cpu_idx)
@@ -636,21 +637,42 @@ int main(int argc, char** argv)
     (*it)->impl_replacement_initialize();
   }
 
+  // Read PC file
+  FILE * pc_file;
+  pc_file = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/pc_output.out", "r");
+  char *line = NULL;
+  size_t len = 0;
+  ssize_t read;
+
+  while ((read = getline(&line, &len, pc_file)) != -1) {
+      // Process the line here
+      if (line[0] == 'I') {
+          long int insn_tmp;
+          uint64_t pc_tmp;
+          char tmp1[256], tmp2[256];
+          sscanf(line, "%s %ld %s %x", tmp1, &insn_tmp, tmp2, &pc_tmp);
+          pc_his[insn_tmp/STAT_PRINTING_PERIOD] = pc_tmp;
+      }
+  }
+  fclose(pc_file);
+  printf("Finish PC read. Last test PC read: %x\n", pc_his[999]);
+
   long num_branch = 0;
   long mispredict = 0;
   // simulation entry point
   long i = 0;
   for(; i < (warmup_instructions + simulation_instructions); i++){
-      ooo_cpu[0]->perform_bp(traces[0]->get(), &num_branch, &mispredict);
+      ooo_cpu[0]->perform_bp(i+1, traces[0]->get(), &num_branch, &mispredict);
       if(i % STAT_PRINTING_PERIOD == 0){
           printf("Insn: %ld Branch: %ld Mispredict: %ld \n", i+1, num_branch, mispredict); 
-          // Need to store the states
-          ooo_cpu[0]->bp_store_states(i);
-          // Need to load the states
-          if(iteration > 0){
-              if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
-                  ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
-          }
+      //     // Need to store the states
+      //     // ooo_cpu[0]->bp_store_states(i);
+      //     // Need to load the states
+      //     if(iteration > 0){
+      //         if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
+      //             ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
+      //     }
+
       }
   }
   printf("FinishBP! Insn: %ld Branch: %ld Mispredict: %ld \n", i, num_branch, mispredict); 

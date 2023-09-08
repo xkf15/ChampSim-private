@@ -12,6 +12,9 @@
 extern uint8_t warmup_complete[NUM_CPUS];
 extern uint8_t MAX_INSTR_DESTINATIONS;
 
+// Added by Kaifeng Xu
+long loaded_bp_insn = 0;
+
 void O3_CPU::operate()
 {
   instrs_to_read_this_cycle = std::min((std::size_t)FETCH_WIDTH, IFETCH_BUFFER.size() - IFETCH_BUFFER.occupancy());
@@ -42,8 +45,25 @@ void O3_CPU::initialize_core()
   impl_btb_initialize();
 }
 
-void O3_CPU::perform_bp(ooo_model_instr arch_instr, long *num_branch, long *mispredict)
+void O3_CPU::perform_bp(long insn_count, ooo_model_instr arch_instr, long *num_branch, long *mispredict)
 {
+    // if(insn_count % STAT_PRINTING_PERIOD == 0){
+    //     printf("Insn_count: %ld PC: %x\n", insn_count, arch_instr.ip);
+    // }
+    // Check if ip is in ip history
+    int i = (insn_count / STAT_PRINTING_PERIOD) - 100;
+    i = (i < 0) ? 0 : i;
+    for(; i < (insn_count / STAT_PRINTING_PERIOD) + 100; i++){
+        if(arch_instr.ip == pc_his[i]){
+            // if find the pc in history
+            // printf("Curr Insn_count: %ld PC: %x, Matched Insn_count: %ld\n", insn_count, arch_instr.ip, i * STAT_PRINTING_PERIOD);
+            if(i * STAT_PRINTING_PERIOD > loaded_bp_insn){
+                printf("?? %ld\n", i * STAT_PRINTING_PERIOD + STAT_PRINTING_PERIOD);
+                bp_load_states(i * STAT_PRINTING_PERIOD + STAT_PRINTING_PERIOD);
+                loaded_bp_insn = i * STAT_PRINTING_PERIOD;
+            }
+        }
+    }
     if (arch_instr.is_branch) {
         (*num_branch)++;
         // Perform branch predictor
