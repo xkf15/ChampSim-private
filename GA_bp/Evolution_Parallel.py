@@ -1,4 +1,5 @@
 import random
+import time
 import datetime
 import os
 from deap import base, creator, tools
@@ -8,9 +9,10 @@ TAGE_BIMODAL_TABLE_SIZE = 16384
 TAGE_NUM_COMPONENTS = 12
 TAGE_MAX_INDEX_BITS = 12
 TAGE_ENTRY_LENGTH = 3 + 16 + 2
+fpath = ""
 
 def store(fname, bitstream):
-    print("Start Writing BP States\n")
+    # print("Start Writing BP States\n")
     bp_states = open(fname, "w")
     for i in range(TAGE_BIMODAL_TABLE_SIZE):
         bin_str = ''.join(str(bit) for bit in bitstream[i*8:i*8+8])
@@ -30,22 +32,49 @@ def store(fname, bitstream):
             bp_states.write(format(ctr, '02x') + " " + format(tag, '04x') + " " + format(useful, '02x') + " ")
         bp_states.write("\n")
     bp_states.close()
-    print("Finish Writing BP States!\n")
+    # print("Finish Writing BP States!")
     return
 
 def load(bitstream):
     return
 
 # DEAP Parameters
-POPULATION_SIZE = 20
+POPULATION_SIZE = 100
 BITSTREAM_LENGTH = TAGE_BIMODAL_TABLE_SIZE * 8 + TAGE_NUM_COMPONENTS * (1 << TAGE_MAX_INDEX_BITS) * TAGE_ENTRY_LENGTH
 MUTATION_RATE = 0.01
 NUM_GENERATIONS = 50
 
-# Manually defined fitness function (you should replace this with your own function)
-def eval(bitstream):
-    # Example fitness function: Count the number of '1's in the bitstream
-    return sum(bitstream),
+# Manually defined fitness function
+# Check output files from ChampSim
+def eval(bitstream, gen, idx, fpath):
+    # Check if output file exists
+    while not os.path.isfile(fpath):
+        print(f"{fpath} not found yet, Wait for 10 mins")
+        time.sleep(600)
+    fit = 0
+    while True:
+        out_file = open(fpath, "r")
+        while True:
+            line = out_file.readline()
+            if not line:
+                break
+            # results
+            if "FinishBP" in line:
+                tokens = line.split()
+                insn = int(tokens[2])
+                insn_b = int(tokens[4])
+                bp_miss = int(tokens[6])
+                fit = 1000.0 - 1000.0 * bp_miss / insn
+                break
+        out_file.close()
+        # Check if fit gets updated
+        if fit > 0.1:
+            break
+        else:
+            # Check every 10 mins for the file
+            # print("Recheck the file for results")
+            time.sleep(600)
+    return fit,
 
 # Initialize the DEAP framework
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -55,7 +84,7 @@ toolbox = base.Toolbox()
 toolbox.register("attr_bool", random.randint, 0, 1)
 toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_bool, n=BITSTREAM_LENGTH)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-toolbox.register("evaluate", eval)
+toolbox.register("evaluate", eval, gen=0, idx=0, fpath="")
 toolbox.register("mate", tools.cxTwoPoint)
 toolbox.register("mutate", tools.mutFlipBit, indpb=MUTATION_RATE)
 toolbox.register("select", tools.selTournament, tournsize=3)
@@ -64,24 +93,34 @@ def Get_Current_Readable_Time():
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 def main():
+    # print(eval([0], 0, 0, "test-20230807_140354/Gen_0/pop_0.txt.out"))
+    # return
     population = toolbox.population(n=POPULATION_SIZE)
+    # have all 0s in the initial states
+    for i in range(BITSTREAM_LENGTH):
+        population[0][i] = 0
     
     wk_dir = "test-" + Get_Current_Readable_Time()
     os.mkdir(wk_dir)
-    os.mkdir(wk_dir + "/init")
-    for i in range(POPULATION_SIZE):
-        store(f"./{wk_dir}/init/test_init_{i}.txt", population[i])
-    return
  
     for generation in range(NUM_GENERATIONS):
-        # Evaluate the fitness of each individual in the population
-        fitness_scores = [toolbox.evaluate(individual)[0] for individual in population]
+        # Submit all jobs
+        os.mkdir(f"{wk_dir}/Gen_{generation}")
+        for i in range(POPULATION_SIZE):
+            fpath = f"./{wk_dir}/Gen_{generation}/pop_{i}.txt"
+            store(fpath, population[i])
+            os.system(f"sbatch champsim-slurm-qemutrace.sh {fpath}")
 
+        # Evaluate the fitness of each individual in the population
+        fitness_scores = []
+        for idx, ind in enumerate(population):
+            # print(ind.fitness.values)
+            ind.fitness.values = toolbox.evaluate(ind, gen=generation, idx=idx, fpath=f"./{wk_dir}/Gen_{generation}/pop_{idx}.txt.out")
+            fitness_scores.append(ind.fitness.values)
         # Find the index of the individual with the highest fitness score
         best_index = max(range(POPULATION_SIZE), key=lambda i: fitness_scores[i])
-
-        # Print the best bitstream and its fitness score for this generation
-        print(f"Generation {generation + 1}: Best Bitstream = {population[best_index]}, Fitness = {fitness_scores[best_index]}")
+        # # Print the best bitstream and its fitness score for this generation
+        os.system(f"echo 'Generation {generation}: Best Bitstream = # {best_index} MPKI = {1000 - fitness_scores[best_index][0]}'")
 
         # Create a new generation using tournament selection
         offspring = toolbox.select(population, len(population))
