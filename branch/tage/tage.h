@@ -1,4 +1,5 @@
 #include "ooo_cpu.h"
+#include <math.h>
 #include <cstring>
 
 
@@ -100,15 +101,34 @@ void Tage::store_tables(long insn_count)
     printf("Finish Table Store\n");
 }
 
+void toArray(long number, char *numberArray)
+{
+    int n = log10(number) + 1;
+    int i;
+    for (i = n-1; i >= 0; --i, number /= 10){
+        numberArray[i] = (number % 10) + '0';
+    }
+    return;
+}
+
 void Tage::load_tables(long insn_count)
 {
     // Load current states from a file
     char ld_fname[100];
     char insn_str[20];
     char iter_str[10];
+    for(int i = 0; i < 20; i++){
+        insn_str[i] = 0;
+    }
+    for(int i = 0; i < 10; i++){
+        iter_str[i] = 0;
+    }
+
     strcpy(ld_fname, bp_states_init_fname);
-    sprintf(insn_str, "%ld", insn_count);
-    sprintf(iter_str, "%d", iteration - 1);
+    // sprintf(insn_str, "%ld", insn_count);
+    toArray(insn_count, insn_str);
+    // sprintf(iter_str, "%d", iteration - 1);
+    toArray(10, iter_str);
     strcat(ld_fname, insn_str);
     strcat(ld_fname, "-v");
     strcat(ld_fname, iter_str);
@@ -119,7 +139,7 @@ void Tage::load_tables(long insn_count)
     for(; i < TAGE_BIMODAL_TABLE_SIZE ; i++){
         fscanf(fptr, "%02x ", &bimodal_table[i]);
     }
-    printf("Finish Bimodal Load\n");
+    /// printf("Finish Bimodal Load\n");
     // tage_predictor_table_entry
     for(i = 0; i < TAGE_NUM_COMPONENTS ; i++){
         int j = 0;
@@ -130,7 +150,7 @@ void Tage::load_tables(long insn_count)
         }
     }
     fclose(fptr);
-    printf("Finish Table Load\n");
+    printf("Finish Table Load: %s\n", ld_fname);
 }
 
 void Tage::init()
