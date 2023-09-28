@@ -610,70 +610,90 @@ int main(int argc, char** argv)
   std::cout << "VirtualMemory page size: " << PAGE_SIZE << " log2_page_size: " << LOG2_PAGE_SIZE << std::endl;
 
   std::cout << std::endl;
-  for (int i = optind; i < argc; i++) {
-    std::cout << "CPU " << traces.size() << " runs " << argv[i] << std::endl;
+  //    for (int i = optind; i < argc; i++) {
+  //      std::cout << "CPU " << traces.size() << " runs " << argv[i] << std::endl;
 
-    traces.push_back(get_tracereader(argv[i], traces.size(), knob_cloudsuite));
+  //      traces.push_back(get_tracereader(argv[i], traces.size(), knob_cloudsuite));
 
-    if (traces.size() > NUM_CPUS) {
-      printf("\n*** Too many traces for the configured number of cores ***\n\n");
-      assert(0);
-    }
-  }
+  //      if (traces.size() > NUM_CPUS) {
+  //        printf("\n*** Too many traces for the configured number of cores ***\n\n");
+  //        assert(0);
+  //      }
+  //    }
 
-  if (traces.size() != NUM_CPUS) {
-    printf("\n*** Not enough traces for the configured number of cores ***\n\n");
-    assert(0);
-  }
-  // end trace file setup
+  //    if (traces.size() != NUM_CPUS) {
+  //      printf("\n*** Not enough traces for the configured number of cores ***\n\n");
+  //      assert(0);
+  //    }
+  //    // end trace file setup
 
-  // SHARED CACHE
-  for (O3_CPU* cpu : ooo_cpu) {
-    cpu->initialize_core();
-  }
+  //    // SHARED CACHE
+  //    for (O3_CPU* cpu : ooo_cpu) {
+  //      cpu->initialize_core();
+  //    }
 
-  for (auto it = caches.rbegin(); it != caches.rend(); ++it) {
-    (*it)->impl_prefetcher_initialize();
-    (*it)->impl_replacement_initialize();
-  }
+  //    for (auto it = caches.rbegin(); it != caches.rend(); ++it) {
+  //      (*it)->impl_prefetcher_initialize();
+  //      (*it)->impl_replacement_initialize();
+  //    }
 
   // Read PC file
-  FILE * pc_file;
-  pc_file = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/pc_output.out", "r");
-  char *line = NULL;
-  size_t len = 0;
-  ssize_t read;
+  // FILE * pc_file;
+  // pc_file = fopen("/tigress/kaifengx/ChampSim/branch/tage/states/pc_output.out", "r");
+  // char *line = NULL;
+  // size_t len = 0;
+  // ssize_t read;
 
-  while ((read = getline(&line, &len, pc_file)) != -1) {
-      // Process the line here
-      if (line[0] == 'I') {
-          long int insn_tmp;
-          uint64_t pc_tmp;
-          char tmp1[256], tmp2[256];
-          sscanf(line, "%s %ld %s %x", tmp1, &insn_tmp, tmp2, &pc_tmp);
-          pc_his[insn_tmp/STAT_PRINTING_PERIOD] = pc_tmp;
-      }
-  }
-  fclose(pc_file);
-  printf("Finish PC read. Last test PC read: %x\n", pc_his[999]);
+  // while ((read = getline(&line, &len, pc_file)) != -1) {
+  //     // Process the line here
+  //     if (line[0] == 'I') {
+  //         long int insn_tmp;
+  //         uint64_t pc_tmp;
+  //         char tmp1[256], tmp2[256];
+  //         sscanf(line, "%s %ld %s %x", tmp1, &insn_tmp, tmp2, &pc_tmp);
+  //         pc_his[insn_tmp/STAT_PRINTING_PERIOD] = pc_tmp;
+  //     }
+  // }
+  // fclose(pc_file);
+  // printf("Finish PC read. Last test PC read: %x\n", pc_his[999]);
+
+  ifstream trace_file;
+  // printf("Fname: %s\n", argv[argc-1]);
+  // exit(0);
+  trace_file.open(argv[argc-1]);
+  // trace_file.open("/scratch/gpfs/kaifengx/trace_br_20230918_imageprocessing_2.out");
 
   long num_branch = 0;
   long mispredict = 0;
   // simulation entry point
   long i = 0;
   for(; i < (warmup_instructions + simulation_instructions); i++){
-      ooo_cpu[0]->perform_bp(i+1, traces[0]->get(), &num_branch, &mispredict);
+      // read a line:
+      uint64_t pc_tmp;
+      bool is_branch;
+      bool is_taken;
+      char str_tmp1[256], str_tmp2[256];
+      trace_file >> str_tmp1 >> hex >> pc_tmp >> str_tmp2 >> is_branch;
+      // cout << hex << pc_tmp << " " << str_tmp2 << " " << is_branch << endl;
+      // exit(0);
+      if(is_branch){
+          trace_file >> str_tmp1 >> is_taken;
+          // cout << i << " " << hex << pc_tmp  << " " << is_taken << endl;
+          ooo_cpu[0]->perform_bp_useronly(i+1, pc_tmp, is_taken, &num_branch, &mispredict);
+      }
+      // ooo_cpu[0]->perform_bp(i+1, traces[0]->get(), &num_branch, &mispredict);
       if(i % STAT_PRINTING_PERIOD == 0){
           printf("Insn: %ld Branch: %ld Mispredict: %ld \n", i+1, num_branch, mispredict); 
-      //     // Need to store the states
-      //     // ooo_cpu[0]->bp_store_states(i);
-      //     // Need to load the states
-      //     if(iteration > 0){
-      //         if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
-      //             ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
-      //     }
+          // Need to store the states
+          // ooo_cpu[0]->bp_store_states(i);
+          // Need to load the states
+          if(iteration > 0){
+              if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
+                  ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
+          }
 
       }
   }
+  trace_file.close();
   printf("FinishBP! Insn: %ld Branch: %ld Mispredict: %ld \n", i, num_branch, mispredict); 
 }

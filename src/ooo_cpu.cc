@@ -82,6 +82,22 @@ void O3_CPU::perform_bp(long insn_count, ooo_model_instr arch_instr, long *num_b
     }
 }
 
+void O3_CPU::perform_bp_useronly(long insn_count, uint64_t pc, bool taken, long *num_branch, long *mispredict){
+    (*num_branch)++;
+    std::pair<uint64_t, uint8_t> btb_result = impl_btb_prediction(pc, BRANCH_CONDITIONAL);
+    uint64_t predicted_branch_target = btb_result.first;
+    uint8_t always_taken = btb_result.second;
+    uint8_t branch_prediction = impl_predict_branch(pc, predicted_branch_target, always_taken, BRANCH_CONDITIONAL);
+    if ((branch_prediction == 0) && (always_taken == 0)) {
+        predicted_branch_target = 0;
+    }
+    if (branch_prediction != taken){
+        (*mispredict)++;
+    }
+    impl_update_btb(pc, 0, taken, BRANCH_CONDITIONAL);
+    impl_last_branch_result(pc, 0, taken, BRANCH_CONDITIONAL);
+}
+
 void O3_CPU::init_instruction(ooo_model_instr arch_instr)
 {
   instrs_to_read_this_cycle--;

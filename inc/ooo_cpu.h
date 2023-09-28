@@ -141,6 +141,7 @@ public:
 
   // Added by Kaifeng Xu
   void perform_bp(long insn_count, ooo_model_instr arch_instr, long *num_branch, long *mispredict);
+  void perform_bp_useronly(long insn_count, uint64_t pc, bool taken, long *num_branch, long *mispredict);
   void bp_store_states(long insn_count);
   void bp_load_states(long insn_count);
   // Kaifeng Xu
