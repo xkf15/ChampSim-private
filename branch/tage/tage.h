@@ -62,6 +62,10 @@ public:
 
     void store_tables(long insn_count);
     void load_tables(long insn_count);
+    // Added by Kaifeng Xu to statistically collect miss type
+    long int no_avail_space = 0; // all usefulness > 1
+    long int wrong_pred = 0; // map to the same place
+    long int conflict_miss = 0;
 
     Tage();
     ~Tage();
@@ -114,7 +118,7 @@ void toArray(long number, char *numberArray)
 void Tage::load_tables(long insn_count)
 {
     // Load current states from a file
-    char ld_fname[100];
+    char ld_fname[256];
     char insn_str[20];
     char iter_str[10];
     for(int i = 0; i < 20; i++){
@@ -127,8 +131,8 @@ void Tage::load_tables(long insn_count)
     strcpy(ld_fname, bp_states_init_fname);
     // sprintf(insn_str, "%ld", insn_count);
     toArray(insn_count, insn_str);
-    // sprintf(iter_str, "%d", iteration - 1);
-    toArray(10, iter_str);
+    sprintf(iter_str, "%d", iteration - 1);
+    // toArray(0, iter_str);
     strcat(ld_fname, insn_str);
     strcat(ld_fname, "-v");
     strcat(ld_fname, iter_str);
@@ -245,6 +249,9 @@ void Tage::update(uint64_t ip, uint8_t taken)
     */
     if (pred_comp > 0)  // the predictor component is not the bimodal table
     {
+        // Added by Kaifeng Xu
+        if(!(tage_pred == taken)) wrong_pred ++;
+        // End of Kaifeng Xu
         struct tage_predictor_table_entry *entry = &predictor_table[pred_comp - 1][get_predictor_index(ip, pred_comp)];
         uint8_t useful = entry->useful;
 
@@ -316,8 +323,12 @@ void Tage::update(uint64_t ip, uint8_t taken)
             if (entry_new->useful == 0)
                 isFree = 1;
         }
-        if (!isFree && start_component <= TAGE_NUM_COMPONENTS)
+        // Added by Kaifeng Xu
+        if(!isFree) no_avail_space ++;
+        // End of Kaifeng Xu
+        if (!isFree && start_component <= TAGE_NUM_COMPONENTS){
             predictor_table[start_component - 1][get_predictor_index(ip, start_component)].useful = 0;
+        }
         
         
         // search for entry to steal from the start-component till end
@@ -326,6 +337,9 @@ void Tage::update(uint64_t ip, uint8_t taken)
             struct tage_predictor_table_entry *entry_new = &predictor_table[i - 1][get_predictor_index(ip, i)];
             if (entry_new->useful == 0)
             {
+                // Kaifeng
+                // entry_new->useful ++;
+                // Kaifeng
                 entry_new->tag = get_tag(ip, i);
                 entry_new->ctr = (1 << (TAGE_COUNTER_BITS - 1));
                 break;

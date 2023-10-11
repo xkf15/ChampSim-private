@@ -144,6 +144,7 @@ public:
   void perform_bp_useronly(long insn_count, uint64_t pc, bool taken, long *num_branch, long *mispredict);
   void bp_store_states(long insn_count);
   void bp_load_states(long insn_count);
+  void print_detailed_misses();
   // Kaifeng Xu
 
 #include "ooo_cpu_modules.inc"

@@ -28,3 +28,8 @@ void O3_CPU::bp_load_states(long insn_count)
 {
     tage_predictor[cpu].load_tables(insn_count);
 }
+
+void O3_CPU::print_detailed_misses()
+{
+    printf("Miss Types: no_avail_space: %ld wrong_pred: %ld conflict_miss: %ld\n", tage_predictor[cpu].no_avail_space, tage_predictor[cpu].wrong_pred, tage_predictor[cpu].conflict_miss);
+}

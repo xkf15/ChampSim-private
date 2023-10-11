@@ -665,9 +665,13 @@ int main(int argc, char** argv)
 
   long num_branch = 0;
   long mispredict = 0;
+  if(iteration > 0){
+      ooo_cpu[0]->bp_load_states(simulation_instructions);
+  }
   // simulation entry point
   long i = 0;
-  for(; i < (warmup_instructions + simulation_instructions); i++){
+  // for(; i < (warmup_instructions + simulation_instructions); i++){
+  for(; i < (warmup_instructions); i++){
       // read a line:
       uint64_t pc_tmp;
       bool is_branch;
@@ -682,15 +686,18 @@ int main(int argc, char** argv)
           ooo_cpu[0]->perform_bp_useronly(i+1, pc_tmp, is_taken, &num_branch, &mispredict);
       }
       // ooo_cpu[0]->perform_bp(i+1, traces[0]->get(), &num_branch, &mispredict);
-      if(i % STAT_PRINTING_PERIOD == 0){
-          printf("Insn: %ld Branch: %ld Mispredict: %ld \n", i+1, num_branch, mispredict); 
+      // if(i % STAT_PRINTING_PERIOD == 0){
+      if(i % 1000000 == 0){
+          // printf("Insn: %ld Branch: %ld Mispredict: %ld\n", i+1, num_branch, mispredict); 
+          printf("Insn: %ld Branch: %ld Mispredict: %ld ", i+1, num_branch, mispredict); 
+          ooo_cpu[0]->print_detailed_misses();
           // Need to store the states
           // ooo_cpu[0]->bp_store_states(i);
           // Need to load the states
-          if(iteration > 0){
-              if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
-                  ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
-          }
+          // if(iteration > 0){
+          //     if(i + STAT_PRINTING_PERIOD < warmup_instructions + simulation_instructions)
+          //         ooo_cpu[0]->bp_load_states(i + STAT_PRINTING_PERIOD);
+          // }
 
       }
   }
