@@ -251,12 +251,12 @@ void Tage::update(uint64_t ip, uint8_t taken)
     if (pred_comp > 0)  // the predictor component is not the bimodal table
     {
         // Added by Kaifeng Xu
-        // if(tage_pred == taken) 
-        //     printf("ip %016llx T H\n", ip);
-        // else {
-        //     printf("ip %016llx T M\n", ip);
-        //     wrong_pred ++;
-        // }
+        if(tage_pred == taken) 
+            printf("ip %016llx T H %d\n", ip, taken);
+        else {
+            printf("ip %016llx T M %d\n", ip, taken);
+            wrong_pred ++;
+        }
         // End of Kaifeng Xu
         struct tage_predictor_table_entry *entry = &predictor_table[pred_comp - 1][get_predictor_index(ip, pred_comp)];
         uint8_t useful = entry->useful;
@@ -302,8 +302,8 @@ void Tage::update(uint64_t ip, uint8_t taken)
     }
     else
     {
-        // if(tage_pred == taken) printf("ip %016llx B H\n", ip);
-        // else printf("ip %016llx B M\n", ip);
+        if(tage_pred == taken) printf("ip %016llx B H %d\n", ip, taken);
+        else printf("ip %016llx B M %d\n", ip, taken);
         Index index = get_bimodal_index(ip);
         ctr_update(bimodal_table[index], taken, 0, ((1 << TAGE_BASE_COUNTER_BITS) - 1));  // update ctr for predictor if predictor is bimodal
     }
