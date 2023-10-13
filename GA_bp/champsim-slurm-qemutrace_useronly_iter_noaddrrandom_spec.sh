@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Retrain_bp_kx # create a short name for your job
+#SBATCH --job-name=Spec_bp_kx # create a short name for your job
 #SBATCH --nodes=1                # node count
 #SBATCH --ntasks=1               # total number of tasks across all nodes
 #SBATCH --cpus-per-task=1        # cpu-cores per task (>1 if multi-threaded tasks)
@@ -23,4 +23,9 @@ SIM_INSN=900000000
 mkdir ${BP_STATES}
 $BIN --warmup_instructions ${WARMUP_INSN} --simulation_instructions ${SIM_INSN} -c -b ${BP_STATES}insn -n $1 ${TRACE_LD} > ${BP_STATES}useronly_iter_noaddrrandom_spec_${2}_${1}.out
 sbatch champsim-slurm-qemutrace_useronly_ld_noaddrrandom_spec.sh ${1} ${2} ${4}
-sbatch champsim-slurm-qemutrace_useronly_iter_noaddrrandom_spec.sh $((${1} + 1)) ${2} ${3} ${4}
+if [[ $1 -gt 20 ]]
+then
+    echo "Finish ${2}!"
+else
+    sbatch champsim-slurm-qemutrace_useronly_iter_noaddrrandom_spec.sh $((${1} + 1)) ${2} ${3} ${4}
+fi
