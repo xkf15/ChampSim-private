@@ -43,7 +43,7 @@ void O3_CPU::bp_store_states(long insn_count)
 
 void O3_CPU::bp_load_states(long insn_count)
 {
-    // tage_predictor[cpu].load_tables(insn_count);
+   // tage_predictor[cpu].load_tables(insn_count);
 }
 
 void O3_CPU::print_detailed_misses()

@@ -81,7 +81,9 @@ def process_hot_misses(pc_history_index, br_pc, taken, miss_hit, table_index):
     # Combine all pc_history into one table
     if br_pc == pc_history[pc_history_index]['pc']:
         pattern = pc_history[pc_history_index]['local_his']
-        if pattern in pc_history[table_index]['table']:
+        if len(pattern) == length_local:
+            pattern = int(pattern, 2)
+        if pattern in pc_history[table_index]['table'] and len(pc_history[pc_history_index]['local_his']) == length_local:
             if pc_history[table_index]['table'][pattern] != taken:
                 hot_miss_2 += 1
                 pc_history[table_index]['table'][pattern] = taken
@@ -95,7 +97,7 @@ def process_hot_misses(pc_history_index, br_pc, taken, miss_hit, table_index):
             if miss_hit == 'M':
                 hot_miss_2 += 1
                 # Only update local history table if original BP is a miss
-                if (len(pc_history[table_index]['table']) < 1000 and len(pattern) == length_local):
+                if (len(pc_history[table_index]['table']) < 1000 and len(pc_history[pc_history_index]['local_his']) == length_local):
                     pc_history[table_index]['table'][pattern] = taken
             else:
                 hot_hit_2 += 1
@@ -268,7 +270,9 @@ def reload_hot_misses(pc_history_index, br_pc, taken, miss_hit, table_index):
     # Combine all pc_history into one table
     if br_pc == pc_history[pc_history_index]['pc']:
         pattern = pc_history[pc_history_index]['local_his']
-        if pattern in pc_history[table_index]['table']:
+        if len(pattern) == length_local:
+            pattern = int(pattern, 2)
+        if pattern in pc_history[table_index]['table'] and len(pc_history[pc_history_index]['local_his']) == length_local:
             if pc_history[table_index]['table'][pattern] != taken:
                 hot_miss_3 += 1
                 pc_history[table_index]['table'][pattern] = taken
@@ -394,7 +398,6 @@ def reload_hot_misses(pc_history_index, br_pc, taken, miss_hit, table_index):
         else:
             pc_history[pc_history_index]['local_his'] = pc_history[pc_history_index]['local_his'][1:] + taken
 
-
 br_pc = {}
 
 # tmp_pc = "0x7ffff7fda678"
@@ -404,10 +407,30 @@ tmp_str = ''
 # First Time, record hot PC
 # fn = "/scratch/gpfs/kaifengx/useronly_ld_noaddrrandom_detailed_misses_20230918_imageprocessing_ld10000000_v0.out"
 fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_20230918_imageprocessing_v0.out"
+insn_period = 100000
+end_insn = 1820000
+
+# Store insn number idx * insn_period
+def store_states(path, idx_insn, pc_his_idx):
+    global insn_period
+    file_name = path + "insn" + str(idx_insn * insn_period) + ".out" # insn number is the insn that trigger the load
+    with open(file_name, "w") as f_out:
+        for i in range(real_num_his[idx_insn]):
+            f_out.write(hex(pc_history[pc_his_idx + i]['pc']))
+            f_out.write("\n")
+        # Store history
+        for key in pc_history[pc_his_idx]['table']:
+            f_out.write(str(key) + " " + str(pc_history[pc_his_idx]['table'][key]))
+            f_out.write("\n")
+
+
 for iteration in range(3):
     if iteration == 2:
         # fn = "/scratch/gpfs/kaifengx/useronly_ld_noaddrrandom_detailed_misses_20230918_imageprocessing_2_ld10000000_v0.out"
         fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_20230918_imageprocessing_2_v0.out"
+        # initialize the local histories
+        for i in range(len(pc_history)):
+            pc_history[i]['local_his'] = ''
     with open(fn, "r") as f_misses:
     # with open("/scratch/gpfs/kaifengx/useronly_ld_noaddrrandom_detailed_misses_20230918_imageprocessing_ld10000000_v0.out", "r") as f_misses:
     # with open("/scratch/gpfs/kaifengx/useronly_ld_noaddrrandom_detailed_misses_20230918_imageprocessing_ld10000000_v1.out", "r") as f_misses:
@@ -442,7 +465,7 @@ for iteration in range(3):
             # if line_cnt % 2738 == 0:
             # if line_cnt % 20000 == 0:
             if iteration == 0:
-                if line_cnt % 100000 == 0:
+                if line_cnt % insn_period == 0:
                     # if line_cnt % 40000 == 0:
                     #     break
                     # print(line_cnt)
@@ -457,7 +480,7 @@ for iteration in range(3):
                         elif iteration == 2:
                             reload_hot_misses(pc_history_index + tmp_idx, pc, tokens[4], tokens[3], pc_history_index)
                         break
-                if line_cnt % 100000 == 0 and pc_history_index < len(pc_history) - real_num_his[-1]:
+                if line_cnt % insn_period == 0 and pc_history_index < len(pc_history) - real_num_his[-1]:
                     if iteration == 1:
                         for tmp_idx in range(real_num_his[real_num_his_idx]):
                             print(hex(pc_history[pc_history_index + tmp_idx]['pc']), hot_miss_2 - hot_miss_2_prev, hot_hit_2 - hot_hit_2_prev)
@@ -473,7 +496,7 @@ for iteration in range(3):
                         pc_history_index += real_num_his[real_num_his_idx]
                         real_num_his_idx += 1
 
-            if line_cnt % 1820000 == 0:
+            if line_cnt % end_insn == 0:
             # if line_cnt % 1822781 == 0:
                 break
             # Init entry or update number
@@ -523,7 +546,12 @@ for iteration in range(3):
                 br_pc[pc]["T"] += 1
             if pc == int(tmp_pc, 16):
                 tmp_str += tokens[4]
-
+    # Add table store here after the preprocessing
+    if iteration == 1:
+        pc_his_idx = 0
+        for idx_insn in range(len(real_num_his)):
+            store_states("./states/", idx_insn, pc_his_idx)
+            pc_his_idx += real_num_his[idx_insn]
 
 
 

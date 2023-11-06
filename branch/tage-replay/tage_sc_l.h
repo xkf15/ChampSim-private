@@ -263,9 +263,11 @@ class tage_miss_entry{
 public:
     uint64_t local_history;
     bool valid;
+    bool taken;
     tage_miss_entry(){
         local_history = 0;
         valid = false;
+        taken = true;
     }
 }
 
@@ -315,6 +317,7 @@ class PREDICTOR
 public:
   // Added by Kaifeng Xu
   bool use_SC;
+  int PPCTable_idx; // Store the index of the matched PPCTable enty
   ppc_table PPCTable; // Store Problematic PCs
   tage_miss_table missTable; // Sotre local histories
   // End of Kaifeng Xu
@@ -479,6 +482,7 @@ long long T_slhist[NTLOCAL];
     PPCTable();
     missTable();
     // TODO: Add prefetch PPCTable here
+    // TODO: Add prefetch missTable here
     // End of Kaifeng Xu
 
     m[1] = TAGE_SC_L_MINHIST;
@@ -1057,6 +1061,24 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 
       }
 
+    // Added By Kaifeng Xu
+    // Add local history lookup
+    for(int i = 0; i < PPC_TABLE_ENTRY_NUM; i++){
+        if(PPCTable.entries[i].pc == PC){
+            PPCTable_idx = i;
+            for(int j = 0; j < TAGE_MISS_TABLE_ENTRY_NUM; j++){
+                if(missTable.entries[i].valid && (PPCTable.entries[i].local_history == missTable.entries[i].locla_history)){
+                    // Hit in missTable, use local history to decide
+                    pred_taken = missTable.entries[i].taken;
+                }
+            }
+        } else {
+            PPCTable_idx = -1; // Set an invalid number 
+        }
+
+    }
+    // End of Kaifeng Xu
+
     return pred_taken;
   }
 
@@ -1187,11 +1209,16 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
   {
 
     // Added By Kaifeng Xu
-    // Deafult using tage predictor
+    // Decide which component is used, using tage predictor
     char predict_component = 'T';
     if(LVALID && (WITHLOOP >= 0)) predict_component = 'L';
     else if(use_SC) predict_component = 'S';
     printf("ip %016llx %c %c %d\n", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir);
+    // Update local hitory
+    if(PPCTable_idx >= 0){
+        PPCTable.entries[PPCTable_idx].local_history = (PPCTable.entries[PPCTable_idx].local_history << 1) ^ resolveDir;
+    }
+    // End of Kaifeng Xu
 
 #ifdef SC
 #ifdef LOOPPREDICTOR
