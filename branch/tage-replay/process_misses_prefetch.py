@@ -46,7 +46,7 @@ def hamming(his1, his2):
 hot_miss = 0
 hot_hit = 0
 pc_history = []
-max_pc_num = 2000 # how many hot pcs to record for each period
+max_pc_num = 100 # how many hot pcs to record for each period
 real_num_his = [] # record how many pcs are really recorded, because sometimes only 1~2 pcs show up in that period
 def preprocess_branch_misses(br_pc, insn_cnt):
     global hot_miss
@@ -469,7 +469,7 @@ global_his_len = 128
 # First Time, record hot PC
 # fn = "/scratch/gpfs/kaifengx/useronly_ld_noaddrrandom_detailed_misses_20230918_imageprocessing_ld10000000_v0.out"
 fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_20230918_imageprocessing_v0.out"
-insn_period = 1810000 # 1810000
+insn_period = 200000 # 1810000
 end_insn = 1820000 # 1820000
 
 # Store insn number idx * insn_period
@@ -616,11 +616,11 @@ for iteration in range(3):
             else:
                 global_his = global_his[1:] + tokens[4]
     # Add table store here after the preprocessing
-    if iteration == 1:
-        pc_his_idx = 0
-        for idx_insn in range(len(real_num_his)):
-            store_states("./states/", idx_insn, pc_his_idx)
-            pc_his_idx += real_num_his[idx_insn]
+    # if iteration == 1:
+    #     pc_his_idx = 0
+    #     for idx_insn in range(len(real_num_his)):
+    #         store_states("./states/", idx_insn, pc_his_idx)
+    #         pc_his_idx += real_num_his[idx_insn]
 
 
 

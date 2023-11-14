@@ -33,7 +33,7 @@ uint8_t O3_CPU::predict_branch(uint64_t ip, uint64_t predicted_target, uint8_t a
 void O3_CPU::last_branch_result(uint64_t ip, uint64_t branch_target, uint8_t taken, uint8_t branch_type)
 {
     // tage_predictor[cpu].update(ip, taken);
-    tage_predictor[cpu].UpdatePredictor(ip, (OpType)branch_type, taken, taken, branch_target);
+    tage_predictor[cpu].UpdatePredictor(ip, (OpType)branch_type, taken, taken, branch_target, true);
 }
 
 void O3_CPU::bp_store_states(long insn_count)
@@ -43,7 +43,7 @@ void O3_CPU::bp_store_states(long insn_count)
 
 void O3_CPU::bp_load_states(long insn_count)
 {
-   // tage_predictor[cpu].load_tables(insn_count);
+   tage_predictor[cpu].load_table(insn_count);
 }
 
 void O3_CPU::print_detailed_misses()

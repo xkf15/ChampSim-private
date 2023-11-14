@@ -21,6 +21,7 @@
 // #include "msl/bits.h"
 // #include "msl/fwcounter.h"
 // #include <fmt/core.h>
+#include <fstream>
 // End of Kaifeng Xu
 
 
@@ -269,21 +270,21 @@ public:
         valid = false;
         taken = true;
     }
-}
+};
 
 #define TAGE_MISS_TABLE_ENTRY_NUM 1000 // Number of problem PCs
 // #define HOT_MISS_TABLE_SIZE 
 class tage_miss_table{
 public:
    tage_miss_entry entries[TAGE_MISS_TABLE_ENTRY_NUM];
-   hot_miss_table(){
+   tage_miss_table(){
        int i = 0;
        for(i = 0; i < TAGE_MISS_TABLE_ENTRY_NUM; i++){
-           entries[i]();
+           entries[i];
        }
    }
 
-}
+};
 
 class local_history_entry{
 public:
@@ -293,7 +294,7 @@ public:
         pc = 0;
         local_history = 0;
     }
-}
+};
 
 #define PPC_TABLE_ENTRY_NUM 10 // number of problem PCs
 // #define PPC_TABLE_ENTRY_SIZE
@@ -303,10 +304,10 @@ public:
     ppc_table(){
         int i = 0;
         for(i = 0; i < PPC_TABLE_ENTRY_NUM; i++){
-            local_history_entry();
+            entries[i];
         }
     }
-}
+};
 
 
 // End of Kaifeng Xu
@@ -317,9 +318,370 @@ class PREDICTOR
 public:
   // Added by Kaifeng Xu
   bool use_SC;
+  long long insn_count;
+  int is_ld_st = 0; // 0 ld, st 1, no_st_ld 2
+  int tmp_counter = 0;
+  bool continue_prefetch = true;
   int PPCTable_idx; // Store the index of the matched PPCTable enty
   ppc_table PPCTable; // Store Problematic PCs
   tage_miss_table missTable; // Sotre local histories
+  std::ofstream f_miss_his;
+  std::ifstream f_ld_miss_his;
+  void load_table(long insn_count){
+      return;
+  }
+  void store_table(uint64_t PC, OpType opType, bool taken){
+      f_miss_his << std::hex << PC << " ";
+      f_miss_his << std::dec << opType << " ";
+      f_miss_his << std::dec << phist << " ";
+      for(int i = 0 ; i < NHIST + 1; i++){
+          f_miss_his << ch_i[i].comp << " ";
+          f_miss_his << ch_t[0][i].comp << " ";
+          f_miss_his << ch_t[1][i].comp << " ";
+      }
+      f_miss_his << taken << "\n";
+      return ;
+  }
+  void store_insn_breaker(){
+      f_miss_his << std::hex << 0xdeadbeef << "\n";
+  }
+  int tage_insertion(){
+    // store old history values
+    uint64_t tmp_PC;
+    int tmp_opType;
+    bool resolveDir;
+    if(f_ld_miss_his.peek() == EOF) return 0;
+    f_ld_miss_his >> std::hex >> tmp_PC;
+    // Check Insn breaker
+    // return 0 means not gonna continue
+    if(tmp_PC == 0xdeadbeef) return 0;
+    if(f_ld_miss_his.peek() == EOF) return 0;
+    // store the values that are going to be override
+    long long tmp_phist = phist;
+    int tmp_TICK = TICK;
+    folded_history tmp_ch_i[NHIST + 1];       //utility for computing TAGE indices
+    folded_history tmp_ch_t[2][NHIST + 1];    //utility for computing TAGE tags
+    for(int i = 0; i < NHIST + 1; i++){
+        tmp_ch_i[i].comp = ch_i[i].comp;
+        tmp_ch_i[i].CLENGTH = ch_i[i].CLENGTH;
+        tmp_ch_i[i].OLENGTH = ch_i[i].OLENGTH;
+        tmp_ch_i[i].OUTPOINT = ch_i[i].OUTPOINT;
+        tmp_ch_t[0][i].comp = ch_t[0][i].comp;
+        tmp_ch_t[0][i].CLENGTH = ch_t[0][i].CLENGTH;
+        tmp_ch_t[0][i].OLENGTH = ch_t[0][i].OLENGTH;
+        tmp_ch_t[0][i].OUTPOINT = ch_t[0][i].OUTPOINT;
+        tmp_ch_t[1][i].comp = ch_t[1][i].comp;
+        tmp_ch_t[1][i].CLENGTH = ch_t[1][i].CLENGTH;
+        tmp_ch_t[1][i].OLENGTH = ch_t[1][i].OLENGTH;
+        tmp_ch_t[1][i].OUTPOINT = ch_t[1][i].OUTPOINT;
+    }
+
+    // Read optype phist ch_i ch_t[0] ch_t[1] taken
+    f_ld_miss_his >> std::dec >> tmp_opType;
+    f_ld_miss_his >> std::dec >> phist;
+    for(int i = 0; i < NHIST + 1; i++){
+        f_ld_miss_his >> ch_i[i].comp; 
+        f_ld_miss_his >> ch_t[0][i].comp; 
+        f_ld_miss_his >> ch_t[1][i].comp; 
+    }
+    f_ld_miss_his >> resolveDir;
+    if(f_ld_miss_his.peek() == EOF) return 0;
+
+  // Get Prediction
+    Tagepred (tmp_PC);
+  // Tage insertion
+    bool ALLOC = ((tage_pred != resolveDir) & (HitBank < NHIST));
+    if (ALLOC)
+      {
+
+        int T = 0; // only allocate 1 entry
+        int A = 1;
+        if ((MYRANDOM () & 127) < 32)
+          A = 2;
+        int Penalty = 0;
+        int NA = 0;
+        int DEP = ((((HitBank - 1 + 2 * A) & 0xffe)) ^ (MYRANDOM () & 1)); 
+        // just a complex formula to chose between X and X+1, when X is odd: sorry
+  
+        for (int I = DEP; I < NHIST; I += 2)
+          {
+            int i = I + 1;
+            bool Done = false;
+            if (NOSKIP[i])
+              {
+                if (gtable[i][GI[i]].u == 0)
+                  {
+                    if (abs (2 * gtable[i][GI[i]].ctr + 1) <= 3)
+                      {
+                        gtable[i][GI[i]].tag = GTAG[i];
+                        gtable[i][GI[i]].ctr = (resolveDir) ? 0 : -1;
+                        NA++;
+                        if (T <= 0)
+                          {
+                            break;
+                          }
+                        I += 2;
+                        Done = true;
+                        T -= 1;
+                      }
+                    else
+                      {
+                        if (gtable[i][GI[i]].ctr > 0)
+                          gtable[i][GI[i]].ctr--;
+                        else
+                          gtable[i][GI[i]].ctr++;
+                      }
+                  }
+                else
+                  {
+                    Penalty++;
+                  }
+              }
+  
+            if (!Done)
+              {
+                i = (I ^ 1) + 1;
+                if (NOSKIP[i])
+                  {
+  
+                    if (gtable[i][GI[i]].u == 0)
+                      {
+                        if (abs (2 * gtable[i][GI[i]].ctr + 1) <= 3)
+                          {
+                            gtable[i][GI[i]].tag = GTAG[i];
+                            gtable[i][GI[i]].ctr = (resolveDir) ? 0 : -1;
+                            NA++;
+                            if (T <= 0)
+                              {
+                                break;
+                              }
+                            I += 2;
+                            T -= 1;
+                          }
+                        else
+                          {
+                            if (gtable[i][GI[i]].ctr > 0)
+                              gtable[i][GI[i]].ctr--;
+                            else
+                              gtable[i][GI[i]].ctr++;
+                          }
+                      }
+                    else
+                      {
+                        Penalty++;
+                      }
+                  }
+  
+              }
+          }
+        TICK += (Penalty - 2 * NA);
+        //just the best formula for the Championship:
+        //In practice when one out of two entries are useful
+        if (TICK < 0)
+          TICK = 0;
+        if (TICK >= BORNTICK)
+          {
+            for (int i = 1; i <= BORN; i += BORN - 1)
+              for (int j = 0; j < SizeTable[i]; j++)
+                gtable[i][j].u >>= 1;
+            TICK = 0;
+          }
+      }
+
+    //update predictions
+    if (HitBank > 0)
+      {
+        if (abs (2 * gtable[HitBank][GI[HitBank]].ctr + 1) == 1)
+          if (LongestMatchPred != resolveDir)
+            {                   // acts as a protection 
+              if (AltBank > 0)
+                {
+                  ctrupdate (gtable[AltBank][GI[AltBank]].ctr,
+                             resolveDir, CWIDTH);
+                }
+              if (AltBank == 0)
+                baseupdate (resolveDir);
+            }
+        ctrupdate (gtable[HitBank][GI[HitBank]].ctr, resolveDir, CWIDTH);
+        //sign changes: no way it can have been useful
+        if (abs (2 * gtable[HitBank][GI[HitBank]].ctr + 1) == 1)
+          gtable[HitBank][GI[HitBank]].u = 0;
+        if (alttaken == resolveDir)
+          if (AltBank > 0)
+            if (abs (2 * gtable[AltBank][GI[AltBank]].ctr + 1) == 7)
+              if (gtable[HitBank][GI[HitBank]].u == 1)
+                {
+                  if (LongestMatchPred == resolveDir)
+                    {
+                      gtable[HitBank][GI[HitBank]].u = 0;
+                    }
+                }
+      }
+    else
+      baseupdate (resolveDir);
+
+    if (LongestMatchPred != alttaken)
+      if (LongestMatchPred == resolveDir)
+        {
+          if (gtable[HitBank][GI[HitBank]].u < (1 << UWIDTH) - 1)
+            gtable[HitBank][GI[HitBank]].u++;
+        }
+//END TAGE UPDATE
+
+      // restore the values that are overrided
+      phist = tmp_phist;
+      TICK = tmp_TICK;
+      for(int i = 0; i < NHIST + 1; i++){
+          ch_i[i].comp = tmp_ch_i[i].comp;
+          ch_i[i].CLENGTH = tmp_ch_i[i].CLENGTH;
+          ch_i[i].OLENGTH = tmp_ch_i[i].OLENGTH;
+          ch_i[i].OUTPOINT = tmp_ch_i[i].OUTPOINT;
+          ch_t[0][i].comp = tmp_ch_t[0][i].comp;
+          ch_t[0][i].CLENGTH = tmp_ch_t[0][i].CLENGTH;
+          ch_t[0][i].OLENGTH = tmp_ch_t[0][i].OLENGTH;
+          ch_t[0][i].OUTPOINT = tmp_ch_t[0][i].OUTPOINT;
+          ch_t[1][i].comp = tmp_ch_t[1][i].comp;
+          ch_t[1][i].CLENGTH = tmp_ch_t[1][i].CLENGTH;
+          ch_t[1][i].OLENGTH = tmp_ch_t[1][i].OLENGTH;
+          ch_t[1][i].OUTPOINT = tmp_ch_t[1][i].OUTPOINT;
+      }
+      return 1;
+  }
+  int prefetch_entry(){
+      // store old history values
+      uint64_t tmp_PC;
+      int tmp_opType;
+      bool tmp_taken;
+      f_ld_miss_his >> std::hex >> tmp_PC;
+      // Check Insn breaker
+      // return 0 means not gonna continue
+      if(tmp_PC == 0xdeadbeef) return 0;
+      // store the values that are going to be override
+      long long tmp_phist = phist;
+      int tmp_TICK = TICK;
+      folded_history tmp_ch_i[NHIST + 1];       //utility for computing TAGE indices
+      folded_history tmp_ch_t[2][NHIST + 1];    //utility for computing TAGE tags
+      for(int i = 0; i < NHIST + 1; i++){
+          tmp_ch_i[i].comp = ch_i[i].comp;
+          tmp_ch_i[i].CLENGTH = ch_i[i].CLENGTH;
+          tmp_ch_i[i].OLENGTH = ch_i[i].OLENGTH;
+          tmp_ch_i[i].OUTPOINT = ch_i[i].OUTPOINT;
+          tmp_ch_t[0][i].comp = ch_t[0][i].comp;
+          tmp_ch_t[0][i].CLENGTH = ch_t[0][i].CLENGTH;
+          tmp_ch_t[0][i].OLENGTH = ch_t[0][i].OLENGTH;
+          tmp_ch_t[0][i].OUTPOINT = ch_t[0][i].OUTPOINT;
+          tmp_ch_t[1][i].comp = ch_t[1][i].comp;
+          tmp_ch_t[1][i].CLENGTH = ch_t[1][i].CLENGTH;
+          tmp_ch_t[1][i].OLENGTH = ch_t[1][i].OLENGTH;
+          tmp_ch_t[1][i].OUTPOINT = ch_t[1][i].OUTPOINT;
+      }
+
+      // TODO: Read PC phist ch_i ch_t[0] ch_t[1] taken
+      f_ld_miss_his >> std::dec >> tmp_opType;
+      f_ld_miss_his >> std::dec >> phist;
+      for(int i = 0; i < NHIST + 1; i++){
+          f_ld_miss_his >> ch_i[i].comp; 
+          f_ld_miss_his >> ch_t[0][i].comp; 
+          f_ld_miss_his >> ch_t[1][i].comp; 
+      }
+      f_ld_miss_his >> tmp_taken;
+      GetPrediction(tmp_PC);
+      UpdatePredictor(tmp_PC, (OpType)tmp_opType, tmp_taken, tmp_taken, 0, false);
+
+      // restore the values that are overrided
+      phist = tmp_phist;
+      TICK = tmp_TICK;
+      for(int i = 0; i < NHIST + 1; i++){
+          ch_i[i].comp = tmp_ch_i[i].comp;
+          ch_i[i].CLENGTH = tmp_ch_i[i].CLENGTH;
+          ch_i[i].OLENGTH = tmp_ch_i[i].OLENGTH;
+          ch_i[i].OUTPOINT = tmp_ch_i[i].OUTPOINT;
+          ch_t[0][i].comp = tmp_ch_t[0][i].comp;
+          ch_t[0][i].CLENGTH = tmp_ch_t[0][i].CLENGTH;
+          ch_t[0][i].OLENGTH = tmp_ch_t[0][i].OLENGTH;
+          ch_t[0][i].OUTPOINT = tmp_ch_t[0][i].OUTPOINT;
+          ch_t[1][i].comp = tmp_ch_t[1][i].comp;
+          ch_t[1][i].CLENGTH = tmp_ch_t[1][i].CLENGTH;
+          ch_t[1][i].OLENGTH = tmp_ch_t[1][i].OLENGTH;
+          ch_t[1][i].OUTPOINT = tmp_ch_t[1][i].OUTPOINT;
+      }
+      return 1;
+
+
+      // uint pre_GTAG[NHIST + 1];         // tags for the different tables are computed only once  
+      // int pre_GI[NHIST + 1];            // indexes to the different tables are computed only once  
+
+      // int pre_HitBank;                  // longest matching bank
+      // int pre_AltBank;                  // alternate matching bank
+      // for (int i = NHIST; i > 0; i--)
+      // {
+      //   if (NOSKIP[i])
+      //     if (gtable[i][GI[i]].tag == GTAG[i])
+      //       {
+      //         pre_HitBank = i;
+      //         break;
+      //       }
+      // }
+
+      // for (int i = 1; i <= NHIST; i += 2)
+      //   {
+      //     pre_GI[i] = gindex (PC, i, phist, ch_i);
+      //     pre_GTAG[i] = gtag (PC, i, ch_t[0], ch_t[1]);
+      //     pre_GTAG[i + 1] = pre_GTAG[i];
+      //     pre_GI[i + 1] = pre_GI[i] ^ (pre_GTAG[i] & ((1 << LOGG) - 1));
+      //   }
+      // int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
+      // for (int i = BORN; i <= NHIST; i++)
+      //   if (NOSKIP[i])
+      //     {
+      //       pre_GI[i] += (T << LOGG);
+      //       T++;
+      //       T = T % NBANKHIGH;
+      //     }
+      // T = (PC ^ (phist & ((1 << m[1]) - 1))) % NBANKLOW;
+
+      // for (int i = 1; i <= BORN - 1; i++)
+      //   if (NOSKIP[i])
+      //     {
+      //       pre_GI[i] += (T << LOGG);
+      //       T++;
+      //       T = T % NBANKLOW;
+      //     }
+      // int A = 1;
+      // if ((MYRANDOM () & 127) < 32)
+      //   A = 2;
+      // int DEP = ((((pre_HitBank - 1 + 2 * A) & 0xffe)) ^ (MYRANDOM () & 1));
+      // for (int I = DEP; I < NHIST; I += 2)
+      //   {
+      //     int i = I + 1;
+      //     bool Done = false;
+      //     if (NOSKIP[i])
+      //       {
+      //         if (gtable[i][pre_GI[i]].u == 0)
+      //           {
+      //             if (abs (2 * gtable[i][pre_GI[i]].ctr + 1) <= 3)
+      //               {
+      //                 gtable[i][pre_GI[i]].tag = pre_GTAG[i];
+      //                 gtable[i][pre_GI[i]].ctr = (resolveDir) ? 0 : -1;
+      //                 NA++;
+      //                 if (T <= 0)
+      //                   {
+      //                     break;
+      //                   }
+      //                 I += 2;
+      //                 Done = true;
+      //                 T -= 1;
+      //               }
+      //             else
+      //               {
+      //                 if (gtable[i][GI[i]].ctr > 0)
+      //                   gtable[i][GI[i]].ctr--;
+      //                 else
+      //                   gtable[i][GI[i]].ctr++;
+      //               }
+      //           }
+      //       }
+  }
   // End of Kaifeng Xu
   int THRES;
   bentry *btable;                       //bimodal TAGE table
@@ -479,8 +841,19 @@ long long T_slhist[NTLOCAL];
   void reinit ()
   {
     // Added by Kaifeng Xu
-    PPCTable();
-    missTable();
+    PPCTable;
+    missTable;
+    if(is_ld_st == 1){
+        f_miss_his.open("/tigress/kaifengx/ChampSim/branch/tage-replay/states/miss_history.txt", std::ofstream::out);
+        if (!f_miss_his.is_open()) {
+            std::cerr << "Error opening the miss history file!" << std::endl;
+        }
+    } else if (is_ld_st == 0){
+        f_ld_miss_his.open("/tigress/kaifengx/ChampSim/branch/tage-replay/states/miss_history.txt", std::ofstream::in);
+        if (!f_ld_miss_his.is_open()) {
+            std::cerr << "Error opening the miss history file!" << std::endl;
+        }
+    }
     // TODO: Add prefetch PPCTable here
     // TODO: Add prefetch missTable here
     // End of Kaifeng Xu
@@ -870,6 +1243,9 @@ long long T_slhist[NTLOCAL];
   //  TAGE PREDICTION: same code at fetch or retire time but the index and tags must recomputed
   void Tagepred (uint64_t PC)
   {
+    // Added by Kaifeng Xu
+    // std::cout << ch_i << " " << ch_t[0] << " " << ch_t[1] << std::endl;
+    // End by Kaifeng Xu
     HitBank = 0;
     AltBank = 0;
     for (int i = 1; i <= NHIST; i += 2)
@@ -1063,20 +1439,20 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 
     // Added By Kaifeng Xu
     // Add local history lookup
-    for(int i = 0; i < PPC_TABLE_ENTRY_NUM; i++){
-        if(PPCTable.entries[i].pc == PC){
-            PPCTable_idx = i;
-            for(int j = 0; j < TAGE_MISS_TABLE_ENTRY_NUM; j++){
-                if(missTable.entries[i].valid && (PPCTable.entries[i].local_history == missTable.entries[i].locla_history)){
-                    // Hit in missTable, use local history to decide
-                    pred_taken = missTable.entries[i].taken;
-                }
-            }
-        } else {
-            PPCTable_idx = -1; // Set an invalid number 
-        }
+    // for(int i = 0; i < PPC_TABLE_ENTRY_NUM; i++){
+    //     if(PPCTable.entries[i].pc == PC){
+    //         PPCTable_idx = i;
+    //         for(int j = 0; j < TAGE_MISS_TABLE_ENTRY_NUM; j++){
+    //             if(missTable.entries[i].valid && (PPCTable.entries[i].local_history == missTable.entries[i].local_history)){
+    //                 // Hit in missTable, use local history to decide
+    //                 pred_taken = missTable.entries[i].taken;
+    //             }
+    //         }
+    //     } else {
+    //         PPCTable_idx = -1; // Set an invalid number 
+    //     }
 
-    }
+    // }
     // End of Kaifeng Xu
 
     return pred_taken;
@@ -1205,18 +1581,39 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 // PREDICTOR UPDATE
 
   void UpdatePredictor (uint64_t PC, OpType opType, bool resolveDir,
-                        bool predDir, uint64_t branchTarget)
+                        bool predDir, uint64_t branchTarget, bool is_update_his)
   {
 
     // Added By Kaifeng Xu
-    // Decide which component is used, using tage predictor
-    char predict_component = 'T';
-    if(LVALID && (WITHLOOP >= 0)) predict_component = 'L';
-    else if(use_SC) predict_component = 'S';
-    printf("ip %016llx %c %c %d\n", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir);
-    // Update local hitory
-    if(PPCTable_idx >= 0){
-        PPCTable.entries[PPCTable_idx].local_history = (PPCTable.entries[PPCTable_idx].local_history << 1) ^ resolveDir;
+    if (is_update_his) {
+        // Decide which component is used, using tage predictor
+        char predict_component = 'T';
+        if(LVALID && (WITHLOOP >= 0)) predict_component = 'L';
+        else if(use_SC) predict_component = 'S';
+        // printf("ip %016llx %c %c %d\n", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir);
+        // Update local hitory
+        // if(PPCTable_idx >= 0){
+        //     PPCTable.entries[PPCTable_idx].local_history = (PPCTable.entries[PPCTable_idx].local_history << 1) ^ resolveDir;
+        // }
+    } 
+    // else {
+    //     prefetch_entry(PC, opType, resolveDir, branchTarget);
+    // }
+    // Store the misses
+    if ((pred_taken != resolveDir) && is_update_his) {
+        if(is_ld_st == 1) store_table(PC, opType, resolveDir);
+        // prefetch_entry();
+        // prefetch_entry();
+    }
+    // tmp counter
+    if (is_update_his && continue_prefetch){
+        if(is_ld_st == 0) continue_prefetch = tage_insertion();
+        // if(is_ld_st == 0) continue_prefetch = prefetch_entry();
+    }
+    if (is_update_his) tmp_counter ++;
+    if (tmp_counter % 1000 == 0){
+        continue_prefetch = true;
+        if((is_ld_st == 1) && (tmp_counter >= 10000)) store_insn_breaker();
     }
     // End of Kaifeng Xu
 
@@ -1527,8 +1924,10 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 //END TAGE UPDATE
 
 
-    HistoryUpdate (PC, opType, resolveDir, branchTarget,
-                   phist, ptghist, ch_i, ch_t[0], ch_t[1]);
+    if (is_update_his){
+        HistoryUpdate (PC, opType, resolveDir, branchTarget,
+                       phist, ptghist, ch_i, ch_t[0], ch_t[1]);
+    }
 
 
 //END PREDICTOR UPDATE
