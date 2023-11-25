@@ -414,17 +414,21 @@ tmp_str = ''
 
 
 fnames = []
+# bench_labels = ["chameleon"]
 bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing",
                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
 f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
 
-for i in range(10):
+for i in range(len(bench_labels)):
     for fn in os.listdir(f_dir):
-        if "noidealbranch.out" in fn and bench_labels[i] in fn:
+        # if "detailed_misses_reasons_inv3.out" in fn and bench_labels[i] in fn:
+        if "detailed_misses_reasons_3.out" in fn and bench_labels[i] in fn:
             fnames.append(f_dir + fn)
             fn_tokens = fn.split(".")
             # bench_tokens = fn_tokens[0].split("-")
             # bench_labels.append(bench_tokens[-1])
+
+insn_threshold = 20000000
 
 ipc_origin = []
 br_mpki_list = []
@@ -436,10 +440,10 @@ for fn in fnames:
                 br_mpki = float(tokens[7])
             if "Heartbeat CPU 0" in line:
                 insn_cnt = int(tokens[4])
-                if insn_cnt > 990001000:
-                    break
-                # ipc = float(tokens[12])
                 ipc = int(tokens[4]) * 1.0 / int(tokens[6])
+                # ipc = float(tokens[12])
+                if insn_cnt > insn_threshold:
+                    break
         ipc_origin.append(ipc)
         br_mpki_list.append(br_mpki)
         print(fn)
@@ -447,24 +451,31 @@ print("IPC origin", ipc_origin)
 print("Branch MPKI", br_mpki_list)
 
 fnames = []
-for i in range(10):
+br_mpki_list_2 = []
+for i in range(len(bench_labels)):
     for fn in os.listdir(f_dir):
-        if "_idealbranch_3.out" in fn and bench_labels[i] in fn:
+        if "_load_states.out" in fn and bench_labels[i] in fn:
+        # if "_load_states_every1000atonce.out" in fn and bench_labels[i] in fn:
             fnames.append(f_dir + fn)
 ipc_idealbranch = []
 for fn in fnames:
     with open(fn, "r") as f_misses:
         for line in f_misses:
             tokens = line.split()
+            if "CPU 0 Branch Prediction Accuracy:" in line:
+                br_mpki = float(tokens[7])
             if "Heartbeat CPU 0" in line:
                 insn_cnt = int(tokens[4])
-                if insn_cnt > 990001000:
-                    break
                 # ipc = float(tokens[12])
                 ipc = int(tokens[4]) * 1.0 / int(tokens[6])
+                if insn_cnt > insn_threshold:
+                    break
         ipc_idealbranch.append(ipc)
+        br_mpki_list_2.append(br_mpki)
         print(fn)
 print("Ideal branch", ipc_idealbranch)
+print("Branch MPKI", br_mpki_list_2)
+exit(0)
 
 # print("Total Branch:", line_cnt, "Total Miss", total_miss, "Hot Miss", hot_miss)
 # print("Use Loop:", use_loop, " Misses:", use_loop_miss)
@@ -488,7 +499,7 @@ x_bar_pos = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
 y1 = np.array(ipc_origin)
 y2 = np.array(ipc_idealbranch)
 print("Average IPC improvement", np.average(y2/y1))
-axs.bar(x_bar_pos, y2, width=0.3, color='limegreen', label='No Branch Missprediction')
+axs.bar(x_bar_pos, y2, width=0.3, color='limegreen', label='with Prefetch')
 axs.bar(x_bar_pos, y1, width=0.3, color='cornflowerblue', label='512Kbits TAGE-SC-L')
 # axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'purple', label = str(his_len))
 axs.set_ylabel('IPC')
@@ -501,5 +512,5 @@ handles, labels = axs.get_legend_handles_labels()
 plt.subplots_adjust(top=0.875, bottom=0.325, left=0.070, right=0.985, hspace=0.2, wspace=0.2)
 plt.grid(linestyle = '--', linewidth = 0.5)
 fig.legend(handles, labels, loc='upper right', ncol=2)
-fig.savefig("Ideal_IPC.eps", format='eps')
+# fig.savefig("Prefetch_improve_IPC.eps", format='eps')
 plt.show()

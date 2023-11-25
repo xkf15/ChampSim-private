@@ -398,280 +398,252 @@ def reload_hot_misses(pc_history_index, br_pc, taken, miss_hit, table_index):
 
 
 
-# tmp_pc = "0x7ffff7fda678"
-tmp_pc = "0x7ffff7fce505"
-tmp_str = ''
+# bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing",
+#                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
+bench_labels = ["chameleon"]# , "floatoperation", "linpack", "rnnserving", "videoprocessing",
+for his_len in [128 , 256, 512, 1024]:
+    common_miss_all_list = []
+    compulsory_miss_list = []
+    capacity_miss_list = []
+    conflict_miss_list = []
+    conflict_miss_low_64_list = []
+    conflict_miss_low_128_list = []
+    conflict_miss_low_1024_list = []
+    for bench_l in bench_labels:
+        fnames = []
+        # bench_labels = []
+        f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
+        
+        for fn in os.listdir(f_dir):
+            # if "detailed_misses_reasons_2" in fn and bench_l in fn:
+            if "detailed_misses_reasons_inv3.out" in fn and bench_l in fn:
+                fnames.append(f_dir + fn)
+        
+        for fn in os.listdir(f_dir):
+            if "load_states_every1000atonce.out" in fn and bench_l in fn:
+                fnames.append(f_dir + fn)
+                break
+        print(fnames)
+        
+        br_pc = {}
+        bench_round = 0 
+        end_insn = 9900000
+        for fn in fnames:
+            bench_round += 1
+            br_pc_local = {}
+            br_local_miss = {}
+            with open(fn, "r") as f_misses:
+                line_cnt = 0
+                init_miss = 0
+                init_miss_t = 0
+                init_miss_l = 0
+                init_miss_s = 0
+                total_miss = 0
+                use_loop = 0
+                use_loop_miss = 0
+                use_sc = 0
+                use_sc_miss = 0
+                real_num_his_idx = 0
+                pc_history_index = 0
+                hot_miss_2_prev = 0
+                hot_hit_2_prev = 0
+                unique_pc_his = 0 # unique pc and history
+                unique_pc_his_last = 0 # tmp unique pc and history
+                unique_pc_his_list = [0]
+                x_insn_count = [0]
+                y_bp_mpki = [0]
+                y_bp_conflict_mpki = [0]
+                y_bp_compulsory_mpki = [0]
+                y_bp_capacity_mpki = [0]
+                total_miss_last = 0
+                conflict_miss_last = 0
+                compulsory_miss_last = 0
+                capacity_miss_last = 0
+                same_pc_his = 0 # same pc and history again
+                same_pc_his_miss = 0 # same pc and history but wrong outcome
+                diff_than_prev = 0 # same pc and history but different outcome than last time
+                ghist = ""
+                # miss reasons
+                conflict_miss = 0
+                conflict_miss_low_64 = 0
+                conflict_miss_low_128 = 0
+                conflict_miss_low_1024 = 0
+                capacity_miss = 0
+                compulsory_miss = 0
+                # Common 
+                common_miss = 0
+                common_miss_last = 0
+                common_miss_list = [0]
+                for line in f_misses:
+                    tokens = line.split()
+                    # the first round, record (PC, History) pair
+                    if bench_round == 1:
+                        if "Heartbeat CPU 0" in line:
+                            insn_cnt = int(tokens[4])
+                            x_insn_count.append(insn_cnt)
+                            print(insn_cnt)
+                            if insn_cnt > end_insn:
+                                break
+                        if len(tokens) < 5:
+                            continue
+                        pc = 0
+                        lhist = ""
+                        if tokens[0] == "ip":
+                            pc = int(tokens[1], 16)
+                        else:
+                            continue
+                        line_cnt += 1
+                        # Init entry or update number
+                        phist = ghist
+                        if tokens[3] == 'M':
+                            if (pc, phist) in br_pc:
+                                matched_pc_his = True
+                                br_pc[(pc, phist)]["num"] += 1
+                                same_pc_his += 1
+                                if tokens[3] == 'M':
+                                    same_pc_his_miss += 1
+                                if tokens[4] != br_pc[(pc, phist)]["last_outcome"]:
+                                    diff_than_prev += 1
+                            else:
+                                matched_pc_his = False
+                                unique_pc_his += 1
+                                br_pc[(pc, phist)] = {"num": 1, "miss": 0, "hit": 0, "T": 0, "NT": 0, 
+                                        "h_t": 0, "m_t": 0, "h_l": 0, "m_l": 0, "h_s": 0, "m_s": 0, "last_outcome": tokens[4]}
+                                if tokens[3] == 'M':
+                                    init_miss += 1
+                                    if tokens[2] == 'L':
+                                        init_miss_l += 1
+                                    elif tokens[2] == 'S':
+                                        init_miss_s += 1
+                                    else:
+                                        init_miss_t += 1
+                            # decide miss reasons:
+                            if int(tokens[5]) != 0:
+                                conflict_miss += 1
+                                if int(tokens[5]) < 15:
+                                    conflict_miss_low_64 += 1
+                                if int(tokens[5]) < 19:
+                                    conflict_miss_low_128 += 1
+                                if int(tokens[5]) < 31:
+                                    conflict_miss_low_1024 += 1
+                            else:
+                                if matched_pc_his:
+                                    capacity_miss += 1
+                                else:
+                                    compulsory_miss += 1
+                        # insert local history
+                        # update total miss/hit in branch history entries
+                        if tokens[3] == 'M':
+                            total_miss += 1
+                        if len(ghist) < his_len:
+                            ghist += tokens[4]
+                        else:
+                            ghist = ghist[1:] + tokens[4]
+                    else:
+                        if "Heartbeat CPU 0" in line:
+                            insn_cnt = int(tokens[4])
+                            x_insn_count.append(insn_cnt)
+                            print(insn_cnt)
+                            common_miss_list.append((common_miss - common_miss_last) / (total_miss - total_miss_last))
+                            common_miss_last = common_miss
+                            total_miss_last = total_miss
+                            if insn_cnt > end_insn:
+                                break
+                        if len(tokens) < 5:
+                            continue
+                        pc = 0
+                        if tokens[0] == "ip":
+                            pc = int(tokens[1], 16)
+                        else:
+                            continue
+                        phist = ghist
+                        if tokens[3] == 'M' and (pc, phist) in br_pc:
+                            common_miss += 1
+                        if tokens[3] == 'M':
+                            total_miss += 1
+                        if len(ghist) < his_len:
+                            ghist += tokens[4]
+                        else:
+                            ghist = ghist[1:] + tokens[4]
+        
+            
+            print("Total Branch:", line_cnt, "Total Miss", total_miss, "Hot Miss", hot_miss)
+            print("Use Loop:", use_loop, " Misses:", use_loop_miss)
+            print("Use SC:", use_sc, " Misses:", use_sc_miss)
+            print("Init Miss", init_miss, "Tage: ", init_miss_t, "Loop: ", init_miss_l, "SC: ", init_miss_s)
+            
+            # only_1_cnt = 0
+            # total_cnt = 0
+            # for k,v in ordered:
+            #     total_cnt += 1
+            #     if v['num'] == 1:
+            #         only_1_cnt += 1
+            #     if total_cnt < 20:
+            #         print(hex(k), v)
+            # print("Total branch PCs: ", total_cnt, "Branch PC only occurs once: ", only_1_cnt)
+            
+            # print(tmp_pc, tmp_str)
+            # 
+            # table = {}
+            # local_miss = 0
+            # len_localtable = 10
+            # for i in range(len(tmp_str)):
+            #     if i < len_localtable + 1:
+            #         continue
+            #     table[tmp_str[i-1-len_localtable:i-1]] = tmp_str[i]
+            # 
+            # for i in range(len(tmp_str)):
+            #     if i < len_localtable + 1:
+            #         continue
+            #     if tmp_str[i] != table[tmp_str[i-1-len_localtable:i-1]]:
+            #         local_miss += 1 
+            # print(local_miss)
+            
+            print("Total Branch:", line_cnt, "Branch PC Number:", len(br_pc_local))
+            print("Unique PC and History", unique_pc_his, "Tuple Matched", same_pc_his, "Diff than prev(Reload won't help):", diff_than_prev, "Same PC and History but misses", same_pc_his_miss)
+            print("Branch misses:", total_miss, "Unique Local History", len(br_local_miss))
+        
+            # print("Compulsory:", compulsory_miss, "Conflict: ", conflict_miss, "Capacity: ", capacity_miss)
+            # print("Conflict low 64:", conflict_miss_low_64 * 1.0 / conflict_miss)
+            # print("Conflict low 128:", conflict_miss_low_128 * 1.0 / conflict_miss)
+            # print("Conflict low 1024:", conflict_miss_low_1024 * 1.0 / conflict_miss)
+            # compulsory_miss_list.append(compulsory_miss * 100.0 / total_miss)
+            # conflict_miss_list.append(conflict_miss * 100.0 / total_miss)
+            # capacity_miss_list.append(capacity_miss * 100.0 / total_miss)
+            # conflict_miss_low_64_list.append(conflict_miss_low_64 * 100.0 / total_miss)
+            # conflict_miss_low_128_list.append(conflict_miss_low_128 * 100.0 / total_miss)
+            # conflict_miss_low_1024_list.append(conflict_miss_low_1024 * 100.0 / total_miss)
+        
+            print(bench_l, "Common misses:", common_miss, common_miss/total_miss)
+            if bench_round > 1:
+                common_miss_all_list.append(common_miss/total_miss)
+            # if his_len == 1024:
+            #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'navy', label = str(his_len))
+            # elif his_len == 512:
+            #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'green', label = str(his_len))
+            # elif his_len == 256:
+            #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'purple', label = str(his_len))
+    
+    # Store the results
+    # def store_list(fp, li):
+    #     fp.write(str(li[0]))
+    #     for token in li[1:]:
+    #         fp.write(",")
+    #         fp.write(str(token))
+    #     fp.write("\n")
+    #     return
+    # 
+    # with open("miss_common" + str(his_len) +".csv", "w") as f_output:
+    #     print(common_miss_all_list)
+    #     store_list(f_output, common_miss_all_list)
+
+exit(0)
 
 font = {'weight' : 'bold',
         'size'   : 14}
-
-compulsory_miss_list = []
-capacity_miss_list = []
-conflict_miss_list = []
-conflict_miss_low_64_list = []
-conflict_miss_low_128_list = []
-conflict_miss_low_1024_list = []
-
-# First Time, record hot PC
-# fn = "/scratch/gpfs/kaifengx/useronly_ld_noaddrrandom_detailed_misses_20230918_imageprocessing_ld10000000_v0.out"
-# fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_20230918_imageprocessing_v0.out"
-# fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_detailed_misses_20230918_imageprocessing_v0.out"
-# fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_detailed_misses_20230918_imageprocessing_v0_gh.out"
-# fn = "/scratch/gpfs/kaifengx/function_bench_results/nokvm-2023-11-13_-_23-41-55-chameleon.trace_detailed_misses.out"
-bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "imageprocessing", 
-                "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
-common_miss_all_list = []
-for bench_l in bench_labels:
-    fnames = []
-    # bench_labels = []
-    f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
-    
-    for fn in os.listdir(f_dir):
-        if "detailed_misses_reasons_2" in fn and bench_l in fn:
-            fnames.append(f_dir + fn)
-    
-    for fn in os.listdir(f_dir):
-        if "detailed_misses_reasons_3" in fn and bench_l in fn:
-            fnames.append(f_dir + fn)
-    
-    br_pc = {}
-    bench_round = 0 
-    end_insn = 990000000
-    for fn in fnames:
-        bench_round += 1
-        his_len = 256
-        br_pc_local = {}
-        br_local_miss = {}
-        with open(fn, "r") as f_misses:
-            line_cnt = 0
-            init_miss = 0
-            init_miss_t = 0
-            init_miss_l = 0
-            init_miss_s = 0
-            total_miss = 0
-            use_loop = 0
-            use_loop_miss = 0
-            use_sc = 0
-            use_sc_miss = 0
-            real_num_his_idx = 0
-            pc_history_index = 0
-            hot_miss_2_prev = 0
-            hot_hit_2_prev = 0
-            unique_pc_his = 0 # unique pc and history
-            unique_pc_his_last = 0 # tmp unique pc and history
-            unique_pc_his_list = [0]
-            x_insn_count = [0]
-            y_bp_mpki = [0]
-            y_bp_conflict_mpki = [0]
-            y_bp_compulsory_mpki = [0]
-            y_bp_capacity_mpki = [0]
-            total_miss_last = 0
-            conflict_miss_last = 0
-            compulsory_miss_last = 0
-            capacity_miss_last = 0
-            same_pc_his = 0 # same pc and history again
-            same_pc_his_miss = 0 # same pc and history but wrong outcome
-            diff_than_prev = 0 # same pc and history but different outcome than last time
-            ghist = ""
-            # miss reasons
-            conflict_miss = 0
-            conflict_miss_low_64 = 0
-            conflict_miss_low_128 = 0
-            conflict_miss_low_1024 = 0
-            capacity_miss = 0
-            compulsory_miss = 0
-            # Common 
-            common_miss = 0
-            common_miss_last = 0
-            common_miss_list = [0]
-            for line in f_misses:
-                tokens = line.split()
-                # the first round, record (PC, History) pair
-                if bench_round == 1:
-                    if "Heartbeat CPU 0" in line:
-                        insn_cnt = int(tokens[4])
-                        x_insn_count.append(insn_cnt)
-                        y_bp_mpki.append((total_miss - total_miss_last) * 1000.0 / 10000000)
-                        y_bp_conflict_mpki.append((conflict_miss - conflict_miss_last) * 1000.0 / 10000000)
-                        y_bp_compulsory_mpki.append((compulsory_miss - compulsory_miss_last) * 1000.0 / 10000000)
-                        y_bp_capacity_mpki.append((capacity_miss - capacity_miss_last) * 1000.0 / 10000000)
-                        total_miss_last = total_miss
-                        conflict_miss_last = conflict_miss
-                        compulsory_miss_last = compulsory_miss
-                        capacity_miss_last = capacity_miss
-                        unique_pc_his_list.append(unique_pc_his - unique_pc_his_last)
-                        print(insn_cnt)
-                        if insn_cnt > end_insn:
-                            break
-                        unique_pc_his_last = unique_pc_his
-                    if len(tokens) < 5:
-                        continue
-                    pc = 0
-                    lhist = ""
-                    if tokens[0] == "ip":
-                        pc = int(tokens[1], 16)
-                    else:
-                        continue
-                    line_cnt += 1
-                    # Init entry or update number
-                    phist = ghist
-                    if (pc, phist) in br_pc:
-                        matched_pc_his = True
-                        br_pc[(pc, phist)]["num"] += 1
-                        same_pc_his += 1
-                        if tokens[3] == 'M':
-                            same_pc_his_miss += 1
-                        if tokens[4] != br_pc[(pc, phist)]["last_outcome"]:
-                            diff_than_prev += 1
-                    else:
-                        matched_pc_his = False
-                        unique_pc_his += 1
-                        br_pc[(pc, phist)] = {"num": 1, "miss": 0, "hit": 0, "T": 0, "NT": 0, 
-                                "h_t": 0, "m_t": 0, "h_l": 0, "m_l": 0, "h_s": 0, "m_s": 0, "last_outcome": tokens[4]}
-                        if tokens[3] == 'M':
-                            init_miss += 1
-                            if tokens[2] == 'L':
-                                init_miss_l += 1
-                            elif tokens[2] == 'S':
-                                init_miss_s += 1
-                            else:
-                                init_miss_t += 1
-                    # if miss add local history into miss table
-                    if tokens[3] == 'M':
-                        if phist in br_local_miss:
-                            br_local_miss[phist] += 1
-                        else:
-                            br_local_miss[phist] = 0
-                        # decide miss reasons:
-                        if int(tokens[5]) != 0:
-                            conflict_miss += 1
-                            if int(tokens[5]) < 15:
-                                conflict_miss_low_64 += 1
-                            if int(tokens[5]) < 19:
-                                conflict_miss_low_128 += 1
-                            if int(tokens[5]) < 31:
-                                conflict_miss_low_1024 += 1
-                        else:
-                            if matched_pc_his:
-                                capacity_miss += 1
-                            else:
-                                compulsory_miss += 1
-                    # insert local history
-                    # update total miss/hit in branch history entries
-                    if tokens[3] == 'M':
-                        total_miss += 1
-                    if len(ghist) < his_len:
-                        ghist += tokens[4]
-                    else:
-                        ghist = ghist[1:] + tokens[4]
-                else:
-                    if "Heartbeat CPU 0" in line:
-                        insn_cnt = int(tokens[4])
-                        x_insn_count.append(insn_cnt)
-                        print(insn_cnt)
-                        common_miss_list.append((common_miss - common_miss_last) / (total_miss - total_miss_last))
-                        common_miss_last = common_miss
-                        total_miss_last = total_miss
-                        if insn_cnt > end_insn:
-                            break
-                    if len(tokens) < 5:
-                        continue
-                    pc = 0
-                    if tokens[0] == "ip":
-                        pc = int(tokens[1], 16)
-                    else:
-                        continue
-                    phist = ghist
-                    if tokens[3] == 'M' and (pc, phist) in br_pc:
-                        common_miss += 1
-                    if tokens[3] == 'M':
-                        total_miss += 1
-                    if len(ghist) < his_len:
-                        ghist += tokens[4]
-                    else:
-                        ghist = ghist[1:] + tokens[4]
-    
-        
-        print("Total Branch:", line_cnt, "Total Miss", total_miss, "Hot Miss", hot_miss)
-        print("Use Loop:", use_loop, " Misses:", use_loop_miss)
-        print("Use SC:", use_sc, " Misses:", use_sc_miss)
-        print("Init Miss", init_miss, "Tage: ", init_miss_t, "Loop: ", init_miss_l, "SC: ", init_miss_s)
-        
-        # only_1_cnt = 0
-        # total_cnt = 0
-        # for k,v in ordered:
-        #     total_cnt += 1
-        #     if v['num'] == 1:
-        #         only_1_cnt += 1
-        #     if total_cnt < 20:
-        #         print(hex(k), v)
-        # print("Total branch PCs: ", total_cnt, "Branch PC only occurs once: ", only_1_cnt)
-        
-        # print(tmp_pc, tmp_str)
-        # 
-        # table = {}
-        # local_miss = 0
-        # len_localtable = 10
-        # for i in range(len(tmp_str)):
-        #     if i < len_localtable + 1:
-        #         continue
-        #     table[tmp_str[i-1-len_localtable:i-1]] = tmp_str[i]
-        # 
-        # for i in range(len(tmp_str)):
-        #     if i < len_localtable + 1:
-        #         continue
-        #     if tmp_str[i] != table[tmp_str[i-1-len_localtable:i-1]]:
-        #         local_miss += 1 
-        # print(local_miss)
-        
-        print("Hot Misses: ", hot_miss, "Hit: ", hot_hit)
-        print("Second Time Hot Misses: ", hot_miss_2, "Hit: ", hot_hit_2, "Extra Miss:", extra_miss_2)
-        print("Third Time Hot Misses: ", hot_miss_3, "Hit: ", hot_hit_3, "Extra Miss:", extra_miss_3)
-        
-        print("Total Branch:", line_cnt, "Branch PC Number:", len(br_pc_local))
-        print("Unique PC and History", unique_pc_his, "Tuple Matched", same_pc_his, "Diff than prev(Reload won't help):", diff_than_prev, "Same PC and History but misses", same_pc_his_miss)
-        print("Branch misses:", total_miss, "Unique Local History", len(br_local_miss))
-    
-        # print("Compulsory:", compulsory_miss, "Conflict: ", conflict_miss, "Capacity: ", capacity_miss)
-        # print("Conflict low 64:", conflict_miss_low_64 * 1.0 / conflict_miss)
-        # print("Conflict low 128:", conflict_miss_low_128 * 1.0 / conflict_miss)
-        # print("Conflict low 1024:", conflict_miss_low_1024 * 1.0 / conflict_miss)
-        # compulsory_miss_list.append(compulsory_miss * 100.0 / total_miss)
-        # conflict_miss_list.append(conflict_miss * 100.0 / total_miss)
-        # capacity_miss_list.append(capacity_miss * 100.0 / total_miss)
-        # conflict_miss_low_64_list.append(conflict_miss_low_64 * 100.0 / total_miss)
-        # conflict_miss_low_128_list.append(conflict_miss_low_128 * 100.0 / total_miss)
-        # conflict_miss_low_1024_list.append(conflict_miss_low_1024 * 100.0 / total_miss)
-    
-        print(bench_l, "Common misses:", common_miss, common_miss/total_miss)
-        if bench_round > 1:
-            common_miss_all_list.append(common_miss/total_miss)
-        # if his_len == 1024:
-        #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'navy', label = str(his_len))
-        # elif his_len == 512:
-        #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'green', label = str(his_len))
-        # elif his_len == 256:
-        #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'purple', label = str(his_len))
-
 plt.rc('font', **font)
 fig, axs = plt.subplots(1, 1, figsize=(10, 5))
 x_bar_pos = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
-# y0 = np.array(x_insn_count) * 0
-# y1 = np.array(y_bp_compulsory_mpki)
-# y2 = np.array(y_bp_conflict_mpki)
-# y3 = np.array(y_bp_capacity_mpki)
-# Store the results
-def store_list(fp, li):
-    fp.write(str(li[0]))
-    for token in li[1:]:
-        fp.write(",")
-        fp.write(str(token))
-    fp.write("\n")
-    return
-
-with open("miss_common.csv", "w") as f_output:
-    store_list(f_output, common_miss_all_list)
-
 # axs.plot(x_insn_count, common_miss_list, linewidth=2, color = 'black', label = 'Common miss percentage')
 # axs.plot(x_insn_count, y1, linewidth=2, color = 'cornflowerblue', label = 'Compulsory Misses')
 # axs.plot(x_insn_count, y1 + y2, linewidth=2, color = 'coral', label = 'Conflict Misses')

@@ -414,7 +414,7 @@ tmp_str = ''
 
 
 fnames = []
-bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "imageprocessing", 
+bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing", 
                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
 f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
 

@@ -14,6 +14,11 @@
 
 using namespace std;
 
+// Added by Kaifeng Xu
+extern char bp_states_init_fname[256];
+// char *bp_states_init_fname;
+// End Kaifeng Xu
+
 class CACHE;
 
 class CacheBus : public MemoryRequestProducer

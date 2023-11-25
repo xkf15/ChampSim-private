@@ -22,6 +22,7 @@
 // #include "msl/fwcounter.h"
 // #include <fmt/core.h>
 #include <fstream>
+#include "ooo_cpu.h"
 // End of Kaifeng Xu
 
 
@@ -41,7 +42,6 @@
 #define LOCALT                  //enables the 3rd local history
 
 #endif
-
 
 
 //The statistical corrector components
@@ -319,7 +319,7 @@ public:
   // Added by Kaifeng Xu
   bool use_SC;
   long long insn_count;
-  int is_ld_st = 2; // 0 ld, st 1, no_st_ld 2
+  int is_ld_st = 0; // 0 ld, st 1, no_st_ld 2
   int tmp_counter = 0;
   bool continue_prefetch = true;
   int PPCTable_idx; // Store the index of the matched PPCTable enty
@@ -327,10 +327,18 @@ public:
   tage_miss_table missTable; // Sotre local histories
   std::ofstream f_miss_his;
   std::ifstream f_ld_miss_his;
+  bool init_states_files = false; // Test if init finished
   void load_table(long insn_count){
       return;
   }
   void store_table(uint64_t PC, OpType opType, bool taken){
+      if(!init_states_files){
+          f_miss_his.open(bp_states_init_fname, std::ofstream::out);
+          if (!f_miss_his.is_open()) {
+              std::cerr << "Error opening the miss history file: " << bp_states_init_fname  << std::endl;
+          }
+          init_states_files = true;
+      }
       f_miss_his << std::hex << PC << " ";
       f_miss_his << std::dec << opType << " ";
       f_miss_his << std::dec << phist << " ";
@@ -346,6 +354,13 @@ public:
       f_miss_his << std::hex << 0xdeadbeef << "\n";
   }
   int tage_insertion(){
+    if(!init_states_files){
+        f_ld_miss_his.open(bp_states_init_fname, std::ofstream::in);
+        if (!f_ld_miss_his.is_open()) {
+            std::cerr << "Error opening the miss history file: " << bp_states_init_fname  << std::endl;
+        }
+          init_states_files = true;
+    }
     // store old history values
     uint64_t tmp_PC;
     int tmp_opType;
@@ -843,17 +858,6 @@ long long T_slhist[NTLOCAL];
     // Added by Kaifeng Xu
     PPCTable;
     missTable;
-    if(is_ld_st == 1){
-        f_miss_his.open("/tigress/kaifengx/ChampSim_qemu/ChampSim-private/branch/tage-replay/states/miss_history.txt", std::ofstream::out);
-        if (!f_miss_his.is_open()) {
-            std::cerr << "Error opening the miss history file!" << std::endl;
-        }
-    } else if (is_ld_st == 0){
-        f_ld_miss_his.open("/tigress/kaifengx/ChampSim_qemu/ChampSim_private/branch/tage-replay/states/miss_history.txt", std::ofstream::in);
-        if (!f_ld_miss_his.is_open()) {
-            std::cerr << "Error opening the miss history file!" << std::endl;
-        }
-    }
     // TODO: Add prefetch PPCTable here
     // TODO: Add prefetch missTable here
     // End of Kaifeng Xu
@@ -1608,7 +1612,11 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
     }
     // tmp counter
     if (is_update_his && continue_prefetch){
-        if(is_ld_st == 0) continue_prefetch = tage_insertion();
+        if(is_ld_st == 0) {
+            for( ; continue_prefetch ; ){
+                continue_prefetch = tage_insertion();
+            }
+        }
         // if(is_ld_st == 0) continue_prefetch = prefetch_entry();
     }
     if (is_update_his) tmp_counter ++;

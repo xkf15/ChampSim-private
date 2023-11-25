@@ -420,7 +420,7 @@ conflict_miss_low_1024_list = []
 # fn = "/scratch/gpfs/kaifengx/function_bench_results/nokvm-2023-11-13_-_23-41-55-chameleon.trace_detailed_misses.out"
 fnames = []
 # bench_labels = []
-bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "imageprocessing", 
+bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing", 
                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
 f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
 
