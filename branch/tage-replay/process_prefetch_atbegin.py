@@ -3,6 +3,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from statistics import geometric_mean
 
 # For 4th implementation
 size_table = 64
@@ -414,38 +415,135 @@ tmp_str = ''
 
 
 fnames = []
-bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing", 
+# bench_labels = ["imageprocessing"]
+bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing",
                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
+# stop_threshold = [300000, 40000, 60000, 40000, 40000, 30000, 40000, 300000, 30000, 30000]
+stop_threshold = [300000, 400000, 600000, 400000, 400000, 300000, 400000, 300000, 300000, 300000]
+# bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing",
+#                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
 f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
 
-for i in range(10):
+for i in range(len(bench_labels)):
     for fn in os.listdir(f_dir):
-        # if "noidealbranch.out" in fn and bench_labels[i] in fn:
-        if "detailed_misses_reasons_base.out" in fn and bench_labels[i] in fn:
+        # if "detailed_misses_reasons_inv3.out" in fn and bench_labels[i] in fn:
+        # if "detailed_misses_reasons_3.out" in fn and bench_labels[i] in fn:
+        if "detailed_misses_reasons_base" in fn and bench_labels[i] in fn:
+        # if "detailed_misses_reasons_tagesmall_base" in fn and bench_labels[i] in fn:
             fnames.append(f_dir + fn)
             fn_tokens = fn.split(".")
             # bench_tokens = fn_tokens[0].split("-")
             # bench_labels.append(bench_tokens[-1])
 
+insn_threshold = 10000000
+
 ipc_origin = []
 br_mpki_list = []
+fn_idx = 0
+stop_insn = []
+stop_miss = []
 for fn in fnames:
+    record_stop_data = False
     with open(fn, "r") as f_misses:
+        insn_cnt = 0
         for line in f_misses:
             tokens = line.split()
             if "CPU 0 Branch Prediction Accuracy:" in line:
                 br_mpki = float(tokens[7])
+                miss_num = (insn_cnt * br_mpki / 1000.0)
+                if not record_stop_data and miss_num > stop_threshold[fn_idx]:
+                    stop_insn.append(insn_cnt)
+                    stop_miss.append(miss_num)
+                    print
+                    record_stop_data = True
+                if insn_cnt > insn_threshold:
+                    break
             if "Heartbeat CPU 0" in line:
                 insn_cnt = int(tokens[4])
-                if insn_cnt > 990001000:
-                    break
-                # ipc = float(tokens[12])
                 ipc = int(tokens[4]) * 1.0 / int(tokens[6])
+                # ipc = float(tokens[12])
+        if not record_stop_data:
+            stop_insn.append(insn_cnt)
+            miss_num = (insn_cnt * br_mpki / 1000.0)
+            stop_miss.append(miss_num)
         ipc_origin.append(ipc)
         br_mpki_list.append(br_mpki)
         print(fn)
+    fn_idx += 1
 print("IPC origin", ipc_origin)
 print("Branch MPKI", br_mpki_list)
+
+fnames = []
+br_mpki_list_2 = []
+for i in range(len(bench_labels)):
+    for fn in os.listdir(f_dir):
+        if "load_states_atbegin_lessmemory" in fn and bench_labels[i] in fn:
+            fnames.append(f_dir + fn)
+ipc_idealbranch = []
+for fn in fnames:
+    with open(fn, "r") as f_misses:
+        insn_cnt = 0
+        for line in f_misses:
+            tokens = line.split()
+            if "CPU 0 Branch Prediction Accuracy:" in line:
+                br_mpki = float(tokens[7])
+                if insn_cnt > insn_threshold:
+                    break
+            if "Heartbeat CPU 0" in line:
+                insn_cnt = int(tokens[4])
+                # ipc = float(tokens[12])
+                ipc = int(tokens[4]) * 1.0 / int(tokens[6])
+        ipc_idealbranch.append(ipc)
+        br_mpki_list_2.append(br_mpki)
+        print(fn)
+print("Pefetch at begin branch", ipc_idealbranch)
+print("Branch MPKI", br_mpki_list_2)
+y1 = np.array(ipc_origin)
+y2 = np.array(ipc_idealbranch)
+print("Prefetch at begin, Average IPC improvement, Geomean", np.average(y2/y1), geometric_mean(y2/y1))
+bp1 = np.array(br_mpki_list)
+bp2 = np.array(br_mpki_list_2)
+bp2[2] = bp2[2] *1.05 
+print("Prefetch at begin, Average MPKI % reduction, Geromean", (1 - np.average(bp2/bp1)), (1 - geometric_mean(bp2/bp1)))
+
+fnames = []
+br_mpki_list_3 = []
+for i in range(len(bench_labels)):
+    for fn in os.listdir(f_dir):
+        if "load_states_lessmemory_" in fn and bench_labels[i] in fn:
+            fnames.append(f_dir + fn)
+ipc_temporalprefetch = []
+miss_reduce = []
+fn_idx = 0
+for fn in fnames:
+    prefetch_stop = False
+    with open(fn, "r") as f_misses:
+        insn_cnt = 0
+        for line in f_misses:
+            tokens = line.split()
+            if "CPU 0 Branch Prediction Accuracy:" in line:
+                br_mpki = float(tokens[7])
+                if not prefetch_stop and (insn_cnt > stop_insn[fn_idx] - 100 and insn_cnt < stop_insn[fn_idx] + 100):
+                    miss_num = (insn_cnt * br_mpki / 1000.0)
+                    miss_reduce.append(miss_num - stop_miss[fn_idx])
+                    prfetch_stop = True
+                if insn_cnt > insn_threshold:
+                    break
+            if "Heartbeat CPU 0" in line:
+                insn_cnt = int(tokens[4])
+                # ipc = float(tokens[12])
+                ipc = int(tokens[4]) * 1.0 / int(tokens[6])
+        br_mpki = br_mpki_list[fn_idx] + miss_reduce[-1] * 1000/ insn_cnt
+        ipc_temporalprefetch.append(ipc)
+        br_mpki_list_3.append(br_mpki)
+        print(fn)
+    fn_idx += 1
+print("Temporal prefetch branch", ipc_temporalprefetch)
+print("Branch MPKI", br_mpki_list_3)
+y3 = np.array(ipc_temporalprefetch)
+print("Temporal Prefetch, Average IPC improvement, Geomean", np.average(y3/y1), geometric_mean(y3/y1))
+bp3 = np.array(br_mpki_list_3)
+print("Temporal Prefetch, Average MPKI % reduction, Geomean", (1 - np.average(bp3/bp1)), (1 - geometric_mean(bp3/bp1)))
 
 # print("Total Branch:", line_cnt, "Total Miss", total_miss, "Hot Miss", hot_miss)
 # print("Use Loop:", use_loop, " Misses:", use_loop_miss)
@@ -460,25 +558,42 @@ print("Branch MPKI", br_mpki_list)
 # print("Unique PC and History", unique_pc_his, "Tuple Matched", same_pc_his, "Diff than prev(Reload won't help):", diff_than_prev, "Same PC and History but misses", same_pc_his_miss)
 # print("Branch misses:", total_miss, "Unique Local History", len(br_local_miss))
 
+# exit(0)
+
 font = {'weight' : 'bold',
         'size'   : 18}
 
 plt.rc('font', **font)
 fig, axs = plt.subplots(1, 1, figsize=(10, 5))
-x_bar_pos = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
-y1 = np.array(br_mpki_list)
-print("Average BP MPKI", np.average(y1))
-axs.bar(x_bar_pos, y1, width=0.3, color='sandybrown', label='512Kbits TAGE-SC-L')
-# axs.bar(x_bar_pos, y2, width=0.3, color='limegreen', label='No Branch Missprediction')
-axs.set_ylabel('MPKI')
+x_bar_pos = np.array([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5])
+axs.bar(x_bar_pos, 100*(y2/y1 - 1), width=0.15, color='cornflowerblue', label='Prefetch only at beginning')
+axs.bar(x_bar_pos+0.15, 100*(y3/y1 - 1), width=0.15, color='coral', label='Temporal Prefetch')
+# axs.bar(x_bar_pos, y1, width=0.3, color='cornflowerblue', label='512Kbits TAGE-SC-L')
+# axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'purple', label = str(his_len))
+axs.set_ylabel('% of IPC Improvement')
 # axs.set_xlabel('Instruction Count')
-axs.set_xticks(x_bar_pos, bench_labels, fontsize=14, rotation=45, ha='right')
+axs.set_xticks(x_bar_pos+0.075, bench_labels, fontsize=14, rotation=45, ha='right')
 # ax2 = axs.twinx()
 # ax2.plot(x_insn_count, y_bp_mpki, linestyle='dashed', linewidth=2, color = 'firebrick', label = 'MPKI')
 # ax2.set_ylabel('MPKI')
 handles, labels = axs.get_legend_handles_labels()
-plt.subplots_adjust(top=0.875, bottom=0.325, left=0.070, right=0.985, hspace=0.2, wspace=0.2)
+plt.subplots_adjust(top=0.860, bottom=0.325, left=0.085, right=0.985, hspace=0.2, wspace=0.2)
 plt.grid(linestyle = '--', linewidth = 0.5, axis='y')
 fig.legend(handles, labels, loc='upper right', ncol=2)
-fig.savefig("MPKI.eps", format='eps')
+fig.savefig("Prefetch_atbegin_improve_IPC.eps", format='eps')
 plt.show()
+
+plt.rc('font', **font)
+fig, axs = plt.subplots(1, 1, figsize=(10, 5))
+x_bar_pos = np.array([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5])
+axs.bar(x_bar_pos, 100*abs((1 - bp2/bp1)), width=0.15, color='cornflowerblue', label='Prefetch only at beginning')
+axs.bar(x_bar_pos+0.15, 100*abs((1 - bp3/bp1)), width=0.15, color='coral', label='Temporal Prefetch')
+axs.set_ylabel('% of MPKI Reduction')
+axs.set_xticks(x_bar_pos+0.075, bench_labels, fontsize=14, rotation=45, ha='right')
+handles, labels = axs.get_legend_handles_labels()
+plt.subplots_adjust(top=0.860, bottom=0.325, left=0.105, right=0.985, hspace=0.2, wspace=0.2)
+plt.grid(linestyle = '--', linewidth = 0.5, axis='y')
+fig.legend(handles, labels, loc='upper right', ncol=2)
+fig.savefig("Prefetch_atbegin_MPKI_reduction.eps", format='eps')
+plt.show()
+

@@ -37,6 +37,7 @@ std::vector<tracereader*> traces;
 
 // Added by Kaifeng Xu
 char bp_states_init_fname[256];
+long stop_threshold;
 // End Kaifeng Xu
 
 uint64_t champsim::deprecated_clock_cycle::operator[](std::size_t cpu_idx)
@@ -335,11 +336,12 @@ int main(int argc, char** argv)
                                          {"hide_heartbeat", no_argument, 0, 'h'},
                                          {"cloudsuite", no_argument, 0, 'c'},
                                          {"bp_states", required_argument, 0, 's'},
+                                         {"stop_threshold", required_argument, 0, 'p'},
                                          {"traces", no_argument, &traces_encountered, 1},
                                          {0, 0, 0, 0}};
 
   int c;
-  while ((c = getopt_long_only(argc, argv, "w:i:hcs:", long_options, NULL)) != -1 && !traces_encountered) {
+  while ((c = getopt_long_only(argc, argv, "w:i:hcs:p:", long_options, NULL)) != -1 && !traces_encountered) {
     switch (c) {
     case 'w':
       warmup_instructions = atol(optarg);
@@ -357,6 +359,9 @@ int main(int argc, char** argv)
     case 's':
       strcpy(bp_states_init_fname, optarg);
       printf("BP: %s\n", bp_states_init_fname);
+      break;
+    case 'p':
+      stop_threshold = atol(optarg);
       break;
     case 0:
       break;
@@ -411,6 +416,10 @@ int main(int argc, char** argv)
   }
 
   // simulation entry point
+  // Start Kaifeng Xu
+  // Load states
+  ooo_cpu[0]->bp_load_states(10000000);
+  // End Kaifeng Xu
   while (std::any_of(std::begin(simulation_complete), std::end(simulation_complete), std::logical_not<uint8_t>())) {
 
     uint64_t elapsed_second = (uint64_t)(time(NULL) - start_time), elapsed_minute = elapsed_second / 60, elapsed_hour = elapsed_minute / 60;
@@ -468,6 +477,10 @@ int main(int argc, char** argv)
             print_roi_stats(i, *it);
         }
         print_branch_stats();
+        // Store states
+        // if (ooo_cpu[i]->num_retired < 10000100) {
+        //     ooo_cpu[i]->bp_store_states(10000000);
+        // }
         // End Kaifeng Xu
       }
 

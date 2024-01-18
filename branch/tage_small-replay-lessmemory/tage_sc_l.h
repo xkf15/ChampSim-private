@@ -178,26 +178,26 @@ public:
 #define  POWER
 //use geometric history length
 
-#define NHIST 36                // twice the number of different histories
+#define NHIST 22                // twice the number of different histories
 
-#define NBANKLOW 10             // number of banks in the shared bank-interleaved for the low history lengths
-#define NBANKHIGH 20            // number of banks in the shared bank-interleaved for the  history lengths
+#define NBANKLOW 6              // number of banks in the shared bank-interleaved for the low history lengths
+#define NBANKHIGH 10            // number of banks in the shared bank-interleaved for the  history lengths
 
 
 
-#define BORN 13                 // below BORN in the table for low history lengths, >= BORN in the table for high history lengths,
+#define BORN 9                 // below BORN in the table for low history lengths, >= BORN in the table for high history lengths,
 
 // we use 2-way associativity for the medium history lengths
-#define BORNINFASSOC 9          //2 -way assoc for those banks 0.4 %
-#define BORNSUPASSOC 23
+#define BORNINFASSOC 7          //2 -way assoc for those banks 0.4 %
+#define BORNSUPASSOC 15
 
 /*in practice 2 bits or 3 bits par branch: around 1200 cond. branchs*/
 
-#define TAGE_SC_L_MINHIST 6             //not optimized so far
-#define TAGE_SC_L_MAXHIST 3000
+#define TAGE_SC_L_MINHIST 4             //not optimized so far
+#define TAGE_SC_L_MAXHIST 1024
 
 
-#define LOGG 10                 /* logsize of the  banks in the  tagged TAGE tables */
+#define LOGG 8                 /* logsize of the  banks in the  tagged TAGE tables */
 #define TBITS 8                 //minimum width of the tags  (low history lengths), +4 for high history lengths
 
 
@@ -320,7 +320,7 @@ public:
   // Added by Kaifeng Xu
   bool use_SC;
   long long insn_count;
-  int is_ld_st = 2; // 0 ld, st 1, no_st_ld 2
+  int is_ld_st = 0; // 0 ld, st 1, no_st_ld 2
   int tmp_counter = 0;
   bool continue_prefetch = true;
   int PPCTable_idx; // Store the index of the matched PPCTable enty
@@ -397,20 +397,20 @@ public:
             }
             if(possible_evict_idx == -1) possible_evict_idx = i;
         }
-        if(num_success >= 2) break; // at most insert 2 entries
+        if(num_success >= 1) break; // at most insert 2 entries
     }
     // If no entry is inserted, at least insert 1 entry
-    if(num_success == 0){
-        if(possible_evict_idx >= 0){
-            gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].tag = tag[possible_evict_idx];
-            gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].ctr = (resolveDir[possible_evict_idx]) ? 0 : -1;
-            gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].u = 0;
-        } else { // if all inserting entries are conflict with entires that u > 0
-            gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].tag = tag[NUM_STORED_ENTRY-1];
-            gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].ctr = (resolveDir[NUM_STORED_ENTRY-1]) ? 0 : -1;
-            gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].u = 0;
-        }
-    }
+    // if(num_success == 0){
+    //     if(possible_evict_idx >= 0){
+    //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].tag = tag[possible_evict_idx];
+    //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].ctr = (resolveDir[possible_evict_idx]) ? 0 : -1;
+    //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].u = 0;
+    //     } else { // if all inserting entries are conflict with entires that u > 0
+    //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].tag = tag[NUM_STORED_ENTRY-1];
+    //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].ctr = (resolveDir[NUM_STORED_ENTRY-1]) ? 0 : -1;
+    //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].u = 0;
+    //     }
+    // }
     return 1;
   }
   // End of Kaifeng Xu
@@ -507,7 +507,7 @@ long long IMHIST[256];
 #endif
 
 //global branch GEHL
-#define LOGGNB 10               // 1 1K + 2 * 512-entry tables
+#define LOGGNB 9               // 1 1K + 2 * 512-entry tables
 #define GNB 3
 int Gm[GNB] = { 40, 24, 10 };
 int8_t GGEHLA[GNB][(1 << LOGGNB)] = { {0} };
@@ -515,38 +515,38 @@ int8_t GGEHLA[GNB][(1 << LOGGNB)] = { {0} };
 int8_t *GGEHL[GNB];
 //variation on global branch history
 #define PNB 3
-#define LOGPNB 9                // 1 1K + 2 * 512-entry tables
+#define LOGPNB 8                // 1 1K + 2 * 512-entry tables
 int Pm[PNB] = { 25, 16, 9 };
 int8_t PGEHLA[PNB][(1 << LOGPNB)] = { {0} };
 
 int8_t *PGEHL[PNB];
 
 //first local history
-#define LOGLNB  10              // 1 1K + 2 * 512-entry tables
+#define LOGLNB  9              // 1 1K + 2 * 512-entry tables
 #define LNB 3
 int Lm[LNB] = { 11, 6, 3 };
 int8_t LGEHLA[LNB][(1 << LOGLNB)] = { {0} };
 
 int8_t *LGEHL[LNB];
-#define  LOGLOCAL 8
+#define  LOGLOCAL 7
 #define NLOCAL (1<<LOGLOCAL)
 #define INDLOCAL ((PC ^ (PC >>2)) & (NLOCAL-1))
 long long L_shist[NLOCAL];      //local histories
 
 // second local history
-#define LOGSNB 9                // 1 1K + 2 * 512-entry tables
+#define LOGSNB 8                // 1 1K + 2 * 512-entry tables
 #define SNB 3
 int Sm[SNB] = { 16, 11, 6 };
 int8_t SGEHLA[SNB][(1 << LOGSNB)] = { {0} };
 
 int8_t *SGEHL[SNB];
-#define LOGSECLOCAL 4
+#define LOGSECLOCAL 3
 #define NSECLOCAL (1<<LOGSECLOCAL)      //Number of second local histories
 #define INDSLOCAL  (((PC ^ (PC >>5))) & (NSECLOCAL-1))
 long long S_slhist[NSECLOCAL];
 
 //third local history
-#define LOGTNB 10               // 2 * 512-entry tables
+#define LOGTNB 9               // 2 * 512-entry tables
 #define TNB 2
 int Tm[TNB] = { 9, 4 };
 int8_t TGEHLA[TNB][(1 << LOGTNB)] = { {0} };
@@ -597,10 +597,10 @@ long long T_slhist[NTLOCAL];
 
       }
 
-    NOSKIP[4] = 0;
-    NOSKIP[NHIST - 2] = 0;
-    NOSKIP[8] = 0;
-    NOSKIP[NHIST - 6] = 0;
+    // NOSKIP[4] = 0;
+    // NOSKIP[NHIST - 2] = 0;
+    // NOSKIP[8] = 0;
+    // NOSKIP[NHIST - 6] = 0;
     // just eliminate some extra tables (very very marginal)
 
     for (int i = NHIST; i > 1; i--)

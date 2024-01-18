@@ -398,9 +398,9 @@ def reload_hot_misses(pc_history_index, br_pc, taken, miss_hit, table_index):
 
 
 
-# bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing",
-#                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
-bench_labels = ["chameleon"]# , "floatoperation", "linpack", "rnnserving", "videoprocessing",
+bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving", "videoprocessing",
+                "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
+# bench_labels = ["chameleon"]# , "floatoperation", "linpack", "rnnserving", "videoprocessing",
 for his_len in [128 , 256, 512, 1024]:
     common_miss_all_list = []
     compulsory_miss_list = []
@@ -415,19 +415,18 @@ for his_len in [128 , 256, 512, 1024]:
         f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
         
         for fn in os.listdir(f_dir):
-            # if "detailed_misses_reasons_2" in fn and bench_l in fn:
-            if "detailed_misses_reasons_inv3.out" in fn and bench_l in fn:
+            if "trace_store_states_morememory.out" in fn and bench_l in fn:
                 fnames.append(f_dir + fn)
         
         for fn in os.listdir(f_dir):
-            if "load_states_every1000atonce.out" in fn and bench_l in fn:
+            if "base.out" in fn and bench_l in fn:
                 fnames.append(f_dir + fn)
                 break
         print(fnames)
         
         br_pc = {}
         bench_round = 0 
-        end_insn = 9900000
+        end_insn = 990000000
         for fn in fnames:
             bench_round += 1
             br_pc_local = {}
@@ -625,17 +624,17 @@ for his_len in [128 , 256, 512, 1024]:
             #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'purple', label = str(his_len))
     
     # Store the results
-    # def store_list(fp, li):
-    #     fp.write(str(li[0]))
-    #     for token in li[1:]:
-    #         fp.write(",")
-    #         fp.write(str(token))
-    #     fp.write("\n")
-    #     return
-    # 
-    # with open("miss_common" + str(his_len) +".csv", "w") as f_output:
-    #     print(common_miss_all_list)
-    #     store_list(f_output, common_miss_all_list)
+    def store_list(fp, li):
+        fp.write(str(li[0]))
+        for token in li[1:]:
+            fp.write(",")
+            fp.write(str(token))
+        fp.write("\n")
+        return
+    
+    with open("miss_common_insn" + str(end_insn) + "_his" + str(his_len) +".csv", "w") as f_output:
+        print(common_miss_all_list)
+        store_list(f_output, common_miss_all_list)
 
 exit(0)
 

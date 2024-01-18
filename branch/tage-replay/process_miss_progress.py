@@ -419,15 +419,29 @@ conflict_miss_low_1024_list = []
 # fn = "/scratch/gpfs/kaifengx/useronly_tage-sc-l_detailed_misses_20230918_imageprocessing_v0_gh.out"
 # fn = "/scratch/gpfs/kaifengx/function_bench_results/nokvm-2023-11-13_-_23-41-55-chameleon.trace_detailed_misses.out"
 fnames = []
-# bench_labels = []
 bench_labels = ["imageprocessing"]
+# bench_labels = ["imageprocessing"]
 f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
+end_insn = 500000000 # 990000000
+period_insn = 5000000
 
 for i in range(1):
     for fn in os.listdir(f_dir):
-        if "detailed_misses_reasons_2" in fn and bench_labels[i] in fn:
+        # if "detailed_misses_reasons_2" in fn and bench_labels[i] in fn:
+        if "detailed_misses_reasons_base" in fn and bench_labels[i] in fn:
+        # if "load_states_lessmemory" in fn and bench_labels[i] in fn:
             fnames.append(f_dir + fn)
 
+    for fn in os.listdir(f_dir):
+        if "load_states_lessmemory_" in fn and bench_labels[i] in fn:
+            fnames.append(f_dir + fn)
+
+plt.rc('font', **font)
+fig, axs = plt.subplots(1, 1, figsize=(10, 5))
+
+sub_fig_idx = 0
+fig_label = ['Original MPKI', 'MPKI after prefetch']
+colors = ['black', 'cornflowerblue']
 for fn in fnames:
     his_len = 256
     br_pc = {}
@@ -475,18 +489,20 @@ for fn in fnames:
             tokens = line.split()
             if "Heartbeat CPU 0" in line:
                 insn_cnt = int(tokens[4])
+                if insn_cnt % period_insn > 100 and insn_cnt % period_insn < period_insn - 100:
+                    continue
                 x_insn_count.append(insn_cnt)
-                y_bp_mpki.append((total_miss - total_miss_last) * 1000.0 / 10000000)
-                y_bp_conflict_mpki.append((conflict_miss - conflict_miss_last) * 1000.0 / 10000000)
-                y_bp_compulsory_mpki.append((compulsory_miss - compulsory_miss_last) * 1000.0 / 10000000)
-                y_bp_capacity_mpki.append((capacity_miss - capacity_miss_last) * 1000.0 / 10000000)
+                y_bp_mpki.append((total_miss - total_miss_last) * 1000.0 / period_insn)
+                y_bp_conflict_mpki.append((conflict_miss - conflict_miss_last) * 1000.0 / period_insn)
+                y_bp_compulsory_mpki.append((compulsory_miss - compulsory_miss_last) * 1000.0 / period_insn)
+                y_bp_capacity_mpki.append((capacity_miss - capacity_miss_last) * 1000.0 / period_insn)
                 total_miss_last = total_miss
                 conflict_miss_last = conflict_miss
                 compulsory_miss_last = compulsory_miss
                 capacity_miss_last = capacity_miss
                 unique_pc_his_list.append(unique_pc_his - unique_pc_his_last)
                 print(insn_cnt)
-                if insn_cnt > 990000000:
+                if insn_cnt > end_insn-100: 
                     break
                 unique_pc_his_last = unique_pc_his
             if len(tokens) < 5:
@@ -561,70 +577,11 @@ for fn in fnames:
                 ghist += tokens[4]
             else:
                 ghist = ghist[1:] + tokens[4]
-            #     br_pc[pc]["miss"] += 1
-            # else:
-            #     br_pc[pc]["hit"] += 1
-            # # update num
-            # if tokens[2] == 'L':
-            #     use_loop += 1
-            #     if tokens[3] == 'M':
-            #         use_loop_miss += 1 
-            #         br_pc[pc]["m_l"] += 1
-            #     else:
-            #         br_pc[pc]["h_l"] += 1
-            # elif tokens[2] == 'S':
-            #     use_sc += 1
-            #     if tokens[3] == 'M':
-            #         use_sc_miss += 1 
-            #         br_pc[pc]["m_s"] += 1
-            #     else:
-            #         br_pc[pc]["h_s"] += 1
-            # else:
-            #     if tokens[3] == 'M':
-            #         br_pc[pc]["m_t"] += 1
-            #     else:
-            #         br_pc[pc]["h_t"] += 1
-            # # update miss/hit by Tage or Bimodal
-            # if tokens[4] == '0':
-            #     br_pc[pc]["NT"] += 1
-            # else:
-            #     br_pc[pc]["T"] += 1
-            # if pc == int(tmp_pc, 16):
-            #     tmp_str += tokens[4]
-
-    # ordered = OrderedDict(sorted(br_pc.items(), key=lambda i: i[1]["num"]))
     
     print("Total Branch:", line_cnt, "Total Miss", total_miss, "Hot Miss", hot_miss)
     print("Use Loop:", use_loop, " Misses:", use_loop_miss)
     print("Use SC:", use_sc, " Misses:", use_sc_miss)
     print("Init Miss", init_miss, "Tage: ", init_miss_t, "Loop: ", init_miss_l, "SC: ", init_miss_s)
-    
-    # only_1_cnt = 0
-    # total_cnt = 0
-    # for k,v in ordered:
-    #     total_cnt += 1
-    #     if v['num'] == 1:
-    #         only_1_cnt += 1
-    #     if total_cnt < 20:
-    #         print(hex(k), v)
-    # print("Total branch PCs: ", total_cnt, "Branch PC only occurs once: ", only_1_cnt)
-    
-    # print(tmp_pc, tmp_str)
-    # 
-    # table = {}
-    # local_miss = 0
-    # len_localtable = 10
-    # for i in range(len(tmp_str)):
-    #     if i < len_localtable + 1:
-    #         continue
-    #     table[tmp_str[i-1-len_localtable:i-1]] = tmp_str[i]
-    # 
-    # for i in range(len(tmp_str)):
-    #     if i < len_localtable + 1:
-    #         continue
-    #     if tmp_str[i] != table[tmp_str[i-1-len_localtable:i-1]]:
-    #         local_miss += 1 
-    # print(local_miss)
     
     print("Hot Misses: ", hot_miss, "Hit: ", hot_hit)
     print("Second Time Hot Misses: ", hot_miss_2, "Hit: ", hot_hit_2, "Extra Miss:", extra_miss_2)
@@ -651,47 +608,72 @@ for fn in fnames:
     #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'green', label = str(his_len))
     # elif his_len == 256:
     #     axs.plot(x_insn_count, unique_pc_his_list, linewidth=2, color = 'purple', label = str(his_len))
-plt.rc('font', **font)
-fig, axs = plt.subplots(1, 1, figsize=(10, 5))
-# x_bar_pos = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
-y0 = np.array(x_insn_count) * 0
-y1 = np.array(y_bp_compulsory_mpki)
-y2 = np.array(y_bp_conflict_mpki)
-y3 = np.array(y_bp_capacity_mpki)
-# Store the results
-def store_list(fp, li):
-    fp.write(str(li[0]))
-    for token in li[1:]:
-        fp.write(",")
-        fp.write(str(token))
-    fp.write("\n")
-    return
+    # x_bar_pos = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
+    y0 = np.array(x_insn_count) * 0
+    y1 = np.array(y_bp_compulsory_mpki)
+    y2 = np.array(y_bp_conflict_mpki)
+    y3 = np.array(y_bp_capacity_mpki)
+    # Store the results
+    # def store_list(fp, li):
+    #     fp.write(str(li[0]))
+    #     for token in li[1:]:
+    #         fp.write(",")
+    #         fp.write(str(token))
+    #     fp.write("\n")
+    #     return
+    # 
+    # with open("miss_progress.csv", "w") as f_output:
+    #     store_list(f_output, y_bp_mpki)
+    #     store_list(f_output, y_bp_compulsory_mpki)
+    #     store_list(f_output, y_bp_conflict_mpki)
+    #     store_list(f_output, y_bp_capacity_mpki)
+    
+    if sub_fig_idx == 0:
+        # axs.plot(x_insn_count, y_bp_mpki, linewidth=2, color = colors[sub_fig_idx], label = fig_label[sub_fig_idx])
+        # axs.legend(handles, labels, loc='upper right', ncol=2)
+        axs.fill_between(x_insn_count, y0, y1, color = 'cornflowerblue', label = 'Compulsory Misses')
+        axs.fill_between(x_insn_count, y1, y1 + y2, color = 'coral', label = 'TAGE Hit Misprediction')
+        axs.fill_between(x_insn_count, y1 + y2, y_bp_mpki, color = 'c', label = 'Capacity Misses')
+        handles, labels = axs.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper right', ncol=3)
+        axs.set_ylabel('Branch MPKI')
+        axs.set_xlabel('Instructions')
+        plt.subplots_adjust(top=0.890, bottom=0.125, left=0.075, right=0.985, hspace=0.2, wspace=0.2)
+        fig.savefig("Miss_progress_singlebench_reasons.eps", format='eps')
+        plt.show()
 
-with open("miss_progress.csv", "w") as f_output:
-    store_list(f_output, y_bp_mpki)
-    store_list(f_output, y_bp_compulsory_mpki)
-    store_list(f_output, y_bp_conflict_mpki)
-    store_list(f_output, y_bp_capacity_mpki)
+        plt.rc('font', **font)
+        fig, axs = plt.subplots(1, 1, figsize=(10, 5))
+        axs.plot(x_insn_count, y_bp_mpki, linewidth=2, color = colors[sub_fig_idx], label = fig_label[sub_fig_idx])
+    else:
+        axs.fill_between(x_insn_count, y_bp_mpki, y_bp_mpki_last, color = 'limegreen', edgecolor='limegreen', hatch='x', label = 'Miss Reduction')
+        handles, labels = axs.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper right', ncol=3)
+        axs.set_ylabel('Branch MPKI')
+        axs.set_xlabel('Instructions')
+        plt.subplots_adjust(top=0.890, bottom=0.125, left=0.075, right=0.985, hspace=0.2, wspace=0.2)
+    y_bp_mpki_last = y_bp_mpki
+    # axs.plot(x_insn_count, y1, linewidth=2, color = 'cornflowerblue', label = 'Compulsory Misses')
+    # axs.plot(x_insn_count, y1 + y2, linewidth=2, color = 'coral', label = 'Conflict Misses')
+    # axs.fill_between(x_insn_count, y0, y1, color = 'cornflowerblue', label = 'Compulsory Misses')
+    # axs.fill_between(x_insn_count, y1, y1 + y2, color = 'coral', label = 'TAGE Hit but Wrong')
+    # axs.fill_between(x_insn_count, y1 + y2, y_bp_mpki, color = 'c', label = 'Capacity Misses')
+    
+    # axs.bar(x_bar_pos, compulsory_miss_list, width=0.3, color='deepskyblue', label='Compulsory')
+    # axs.bar(x_bar_pos, conflict_miss_list, bottom=y1, width=0.3, color='coral', label='Conflict')
+    # axs.bar(x_bar_pos, y_low, bottom=y1, alpha=1, width=0.285, color='coral', edgecolor='black', hatch='//', label='Conflict at Lower Banks')
+    # axs.bar(x_bar_pos, capacity_miss_list, bottom=y1+y2, width=0.3, color='c', label='Capacity')
+    # axs.set_xticks(x_bar_pos, bench_labels, rotation=45, ha='right')
+    sub_fig_idx += 1
+# handles1, labels1 = axs[0].get_legend_handles_labels()
+# handles2, labels2 = axs[1].get_legend_handles_labels()
+# handles = handles1 + handles2
+# labels = labels1 + labels2
+# handles, labels = axs.get_legend_handles_labels()
 
-axs.plot(x_insn_count, y_bp_mpki, linewidth=2, color = 'black', label = 'MPKI')
-# axs.plot(x_insn_count, y1, linewidth=2, color = 'cornflowerblue', label = 'Compulsory Misses')
-# axs.plot(x_insn_count, y1 + y2, linewidth=2, color = 'coral', label = 'Conflict Misses')
-axs.fill_between(x_insn_count, y0, y1, color = 'cornflowerblue', label = 'Compulsory Misses')
-axs.fill_between(x_insn_count, y1, y1 + y2, color = 'coral', label = 'Conflict Misses')
-axs.fill_between(x_insn_count, y1 + y2, y_bp_mpki, color = 'c', label = 'Capacity Misses')
-
-# axs.bar(x_bar_pos, compulsory_miss_list, width=0.3, color='deepskyblue', label='Compulsory')
-# axs.bar(x_bar_pos, conflict_miss_list, bottom=y1, width=0.3, color='coral', label='Conflict')
-# axs.bar(x_bar_pos, y_low, bottom=y1, alpha=1, width=0.285, color='coral', edgecolor='black', hatch='//', label='Conflict at Lower Banks')
-# axs.bar(x_bar_pos, capacity_miss_list, bottom=y1+y2, width=0.3, color='c', label='Capacity')
-axs.set_ylabel('Branch MPKI')
-axs.set_xlabel('Instructions')
-# axs.set_xticks(x_bar_pos, bench_labels, rotation=45, ha='right')
-handles, labels = axs.get_legend_handles_labels()
-plt.subplots_adjust(top=0.9, bottom=0.130, left=0.095, right=0.985, hspace=0.2, wspace=0.2)
-fig.legend(handles, labels, loc='upper right', ncol=4)
+# fig.legend(handles, labels, loc='upper right', ncol=4)
 # ax2 = axs.twinx()
 # ax2.plot(x_insn_count, y_bp_mpki, linestyle='dashed', linewidth=2, color = 'firebrick', label = 'MPKI')
 # ax2.set_ylabel('MPKI')
-fig.savefig("Miss_progress.eps", format='eps')
+fig.savefig("Miss_progress_singlebench_reduction.eps", format='eps')
 plt.show()

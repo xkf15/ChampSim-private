@@ -398,7 +398,7 @@ import os
 
 
 
-bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving",
+bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving","videoprocessing",
                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
 # for his_len in [128, 256, 512, 1024]:
 #     common_miss_all_list = []
@@ -653,17 +653,22 @@ bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving",
 font = {'weight' : 'bold',
         'size'   : 14}
 plt.rc('font', **font)
-fig, axs = plt.subplots(1, 1, figsize=(10, 5))
-x_bar_pos = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
+fig, axs = plt.subplots(1, 1, figsize=(10, 6))
+x_bar_pos = np.array([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5])
+# colors = ['cornflowerblue', 'coral', 'limegreen', 'darkviolet']
+colors = ['darkviolet', 'cornflowerblue', 'cadetblue', 'paleturquoise']
 
+color_id = 0
 for his_len in [128, 256, 512, 1024]:
     common_miss_all_list = []
-    with open("miss_common" + str(his_len) + ".csv", "r") as f_r:
+    with open("miss_common_insn990000000_his" + str(his_len) + ".csv", "r") as f_r:
         for line in f_r:
             tokens = line.split(",")
             for token in tokens:
                 common_miss_all_list.append(float(token))
-    axs.bar(x_bar_pos, common_miss_all_list, width=0.3, label='History Length' + str(his_len))
+        print(np.average(np.array(common_miss_all_list)))
+    axs.bar(x_bar_pos + color_id * 0.1, np.array(common_miss_all_list) * 100, width=0.1, color=colors[color_id], label='History Length ' + str(his_len) + 'bits')
+    color_id += 1
 
 # axs.plot(x_insn_count, common_miss_list, linewidth=2, color = 'black', label = 'Common miss percentage')
 # axs.plot(x_insn_count, y1, linewidth=2, color = 'cornflowerblue', label = 'Compulsory Misses')
@@ -679,10 +684,12 @@ for his_len in [128, 256, 512, 1024]:
 # axs.bar(x_bar_pos, capacity_miss_list, bottom=y1+y2, width=0.3, color='c', label='Capacity')
 axs.set_ylabel('% of Common Miss')
 # axs.set_xlabel('Instructions')
-axs.set_xticks(x_bar_pos, bench_labels, rotation=45, ha='right')
+axs.set_xticks(x_bar_pos + 0.15, bench_labels, rotation=45, ha='right')
+axs.set_ylim([0,100])
 handles, labels = axs.get_legend_handles_labels()
-plt.subplots_adjust(top=0.9, bottom=0.180, left=0.095, right=0.985, hspace=0.2, wspace=0.2)
-fig.legend(handles, labels, loc='upper right', ncol=4)
+plt.subplots_adjust(top=0.87, bottom=0.280, left=0.095, right=0.985, hspace=0.2, wspace=0.2)
+fig.legend(handles, labels, loc='upper right', ncol=2)
+plt.grid(linestyle = '--', linewidth = 0.5, axis='y')
 # ax2 = axs.twinx()
 # ax2.plot(x_insn_count, y_bp_mpki, linestyle='dashed', linewidth=2, color = 'firebrick', label = 'MPKI')
 # ax2.set_ylabel('MPKI')
