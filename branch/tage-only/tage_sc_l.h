@@ -162,18 +162,20 @@ public:
   int8_t ctr;
   uint tag;
   int8_t u;
+  // Changed by Kaifeng Xu
+  int8_t is_prefetched;
+  int8_t is_used;
+  // End Kaifeng Xu
 
     gentry ()
   {
     ctr = 0;
     u = 0;
     tag = 0;
-
-
+    is_prefetched = 0;
+    is_used = 0;
   }
 };
-
-
 
 #define  POWER
 //use geometric history length
@@ -318,9 +320,17 @@ class PREDICTOR
 {
 public:
   // Added by Kaifeng Xu
+  uint64_t cnt_i = 0; // number of normal TAGE insertion
+  uint64_t cnt_pre_i = 0;   // number of TAGE prefetch insertion
+  uint64_t cnt_p_u = 0; // insertion and used
+  uint64_t cnt_p_nu = 0; // insertion but not used
+  uint64_t cnt_np_u = 0; // normal TAGE insertion and used
+  uint64_t cnt_np_nu = 0; // normal TAGE insertion but not used
+
+  uint64_t func_asid; // function asid
   bool use_SC;
   long long insn_count;
-  int is_ld_st = 2; // 0 ld, st 1, no_st_ld 2
+  int is_ld_st = 0; // 0 ld, st 1, no_st_ld 2
   int tmp_counter = 0;
   int insert_count = 0;
   bool continue_prefetch = true;
@@ -391,9 +401,27 @@ public:
             num_success ++;
         } else if(gtable[bank_idx[i]][table_idx[i]].u == 0){
             if(abs( 2 * gtable[bank_idx[i]][table_idx[i]].ctr + 1) <= 3){
+                if (gtable[bank_idx[i]][table_idx[i]].tag != 0){
+                   if(gtable[bank_idx[i]][table_idx[i]].is_prefetched == 1){
+                       if(gtable[bank_idx[i]][table_idx[i]].is_used == 1){
+                           cnt_p_u ++;
+                       } else {
+                           cnt_p_nu ++;
+                       }
+                   } else {
+                       if(gtable[bank_idx[i]][table_idx[i]].is_used == 1){
+                           cnt_np_u ++;
+                       } else {
+                           cnt_np_nu ++;
+                       }
+                   }
+                }
                 gtable[bank_idx[i]][table_idx[i]].tag = tag[i];
                 gtable[bank_idx[i]][table_idx[i]].ctr = (resolveDir[i]) ? 0 : -1;
                 gtable[bank_idx[i]][table_idx[i]].u = 0;
+                gtable[bank_idx[i]][table_idx[i]].is_prefetched = 1;
+                gtable[bank_idx[i]][table_idx[i]].is_used = 0;
+                cnt_pre_i ++;
                 num_success ++;
             }
             if(possible_evict_idx == -1) possible_evict_idx = i;
@@ -573,6 +601,7 @@ long long T_slhist[NTLOCAL];
   void reinit ()
   {
     // Added by Kaifeng Xu
+    func_asid = 0;
     PPCTable;
     missTable;
     // TODO: Add prefetch PPCTable here
@@ -1046,10 +1075,15 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 
         bool Huse_alt_on_na = (use_alt_on_na[INDUSEALT] >= 0);
         if ((!Huse_alt_on_na)
-            || (abs (2 * gtable[HitBank][GI[HitBank]].ctr + 1) > 1))
+            || (abs (2 * gtable[HitBank][GI[HitBank]].ctr + 1) > 1)){
           tage_pred = LongestMatchPred;
-        else
+          // Added By Kaifeng Xu
+          if(HitBank >0) gtable[HitBank][GI[HitBank]].is_used = 1;
+        }
+        else {
           tage_pred = alttaken;
+          if(AltBank > 0) gtable[AltBank][GI[AltBank]].is_used = 1;
+        }
 
         HighConf =
           (abs (2 * gtable[HitBank][GI[HitBank]].ctr + 1) >=
@@ -1062,7 +1096,7 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 
 
 //compute the prediction
-  bool GetPrediction (uint64_t PC)
+  bool GetPrediction (uint64_t asid, uint64_t PC)
   {
 // computes the TAGE table addresses and the partial tags
 
@@ -1302,12 +1336,14 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 
 // PREDICTOR UPDATE
 
-  void UpdatePredictor (uint64_t PC, OpType opType, bool resolveDir,
+  void UpdatePredictor (uint64_t asid, uint64_t PC, OpType opType, bool resolveDir,
                         bool predDir, uint64_t branchTarget, bool is_update_his)
   {
 
     // Added By Kaifeng Xu
     if (is_update_his) {
+        // store function asid
+        if (func_asid == 0) func_asid = asid; // store the function asid
         // Decide which component is used, using tage predictor
         char predict_component = 'T';
         if(LVALID && (WITHLOOP >= 0)) predict_component = 'L';
@@ -1492,8 +1528,29 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
                     if (abs (2 * gtable[i][GI[i]].ctr + 1) <= 3)
 #endif
                       {
+                        // Added by Kaifeng Xu
+                        // When evicted, analyze the evicted entry
+                        if (gtable[i][GI[i]].tag != 0){
+                           if(gtable[i][GI[i]].is_prefetched == 1){
+                               if(gtable[i][GI[i]].is_used == 1){
+                                   cnt_p_u ++;
+                               } else {
+                                   cnt_p_nu ++;
+                               }
+                           } else {
+                               if(gtable[i][GI[i]].is_used == 1){
+                                   cnt_np_u ++;
+                               } else {
+                                   cnt_np_nu ++;
+                               }
+                           }
+                        }
+                        // End Kaifeng Xu
                         gtable[i][GI[i]].tag = GTAG[i];
                         gtable[i][GI[i]].ctr = (resolveDir) ? 0 : -1;
+                        gtable[i][GI[i]].is_prefetched = 0;
+                        gtable[i][GI[i]].is_used = 0;
+                        cnt_i ++;
                         if((is_ld_st == 1) && (num_stored < NUM_STORED_ENTRY)){
                             store_table(i, GI[i], GTAG[i], resolveDir);
                             num_stored++;
@@ -1544,8 +1601,29 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 #endif
 
                           {
+                            // Added by Kaifeng Xu
+                            // When evicted, analyze the evicted entry
+                            if (gtable[i][GI[i]].tag != 0){
+                               if(gtable[i][GI[i]].is_prefetched == 1){
+                                   if(gtable[i][GI[i]].is_used == 1){
+                                       cnt_p_u ++;
+                                   } else {
+                                       cnt_p_nu ++;
+                                   }
+                               } else {
+                                   if(gtable[i][GI[i]].is_used == 1){
+                                       cnt_np_u ++;
+                                   } else {
+                                       cnt_np_nu ++;
+                                   }
+                               }
+                            }
+                            // End Kaifeng Xu
                             gtable[i][GI[i]].tag = GTAG[i];
                             gtable[i][GI[i]].ctr = (resolveDir) ? 0 : -1;
+                            gtable[i][GI[i]].is_prefetched = 0;
+                            gtable[i][GI[i]].is_used = 0;
+                            cnt_i ++;
                             if((is_ld_st == 1) && (num_stored < NUM_STORED_ENTRY)){
                                 store_table(i, GI[i], GTAG[i], resolveDir);
                                 num_stored++;
@@ -1687,10 +1765,12 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
             }
         }
     }
-    if (is_update_his) tmp_counter ++;
+    if (is_update_his && (asid == func_asid)) tmp_counter ++;
     if (tmp_counter % 1000 == 0){
         continue_prefetch = true;
         if((is_ld_st == 1) && (tmp_counter >= 10000)) store_insn_breaker();
+        printf("Prefetch_insertion: %" PRIu64 " used: %" PRIu64 " not_used: %" PRIu64 "\n", cnt_pre_i, cnt_p_u, cnt_p_nu);
+        printf("Normal_insertion: %" PRIu64 " used: %" PRIu64 " not_used: %" PRIu64 "\n", cnt_i, cnt_np_u, cnt_np_nu);
     }
     // End of Kaifeng Xu
 

@@ -23,17 +23,17 @@ void O3_CPU::initialize_branch_predictor()
 }
 
 // uint8_t O3_CPU::predict_branch(uint64_t ip)
-uint8_t O3_CPU::predict_branch(uint64_t ip, uint64_t predicted_target, uint8_t always_taken, uint8_t branch_type)
+uint8_t O3_CPU::predict_branch(uint64_t asid, uint64_t ip, uint64_t predicted_target, uint8_t always_taken, uint8_t branch_type)
 {
     // return tage_predictor[cpu].predict(ip);
-    bool prediction = tage_predictor[cpu].GetPrediction(ip);
+    bool prediction = tage_predictor[cpu].GetPrediction(asid, ip);
     return prediction;
 }
 
-void O3_CPU::last_branch_result(uint64_t ip, uint64_t branch_target, uint8_t taken, uint8_t branch_type)
+void O3_CPU::last_branch_result(uint64_t asid, uint64_t ip, uint64_t branch_target, uint8_t taken, uint8_t branch_type)
 {
     // tage_predictor[cpu].update(ip, taken);
-    tage_predictor[cpu].UpdatePredictor(ip, (OpType)branch_type, taken, taken, branch_target, true);
+    tage_predictor[cpu].UpdatePredictor(asid, ip, (OpType)branch_type, taken, taken, branch_target, true);
 }
 
 // void O3_CPU::bp_store_states(long insn_count)

@@ -99,8 +99,8 @@ struct ooo_model_instr {
     this->branch_target = instr.target_vaddr;
     // this->branch_taken = ?; not decided here
 
-    this->asid[0] = instr.cr3 & 0xff;
-    this->asid[1] = (instr.cr3 >> 8) & 0xf;
+    this->asid[0] = (instr.cr3 >> 12) & 0xff;
+    this->asid[1] = (instr.cr3 >> 20) & 0xff;
     this->is_kernel = (instr.seg_states < 3);
   }
 
@@ -118,8 +118,8 @@ struct ooo_model_instr {
       this->source_memory[0] = trace_data.vaddr;
     }
 
-    this->asid[0] = instr.cr3 & 0xff;
-    this->asid[1] = (instr.cr3 >> 8) & 0xf;
+    this->asid[0] = (instr.cr3 >> 12) & 0xff;
+    this->asid[1] = (instr.cr3 >> 20) & 0xff;
     this->is_kernel = (instr.seg_states < 3);
   }
 

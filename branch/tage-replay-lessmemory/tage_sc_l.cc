@@ -23,7 +23,7 @@ void O3_CPU::initialize_branch_predictor()
 }
 
 // uint8_t O3_CPU::predict_branch(uint64_t ip)
-uint8_t O3_CPU::predict_branch(uint64_t ip, uint64_t predicted_target, uint8_t always_taken, uint8_t branch_type)
+uint8_t O3_CPU::predict_branch(uint64_t asid, uint64_t ip, uint64_t predicted_target, uint8_t always_taken, uint8_t branch_type)
 {
     // return tage_predictor[cpu].predict(ip);
     bool prediction = tage_predictor[cpu].GetPrediction(ip);

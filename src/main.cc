@@ -418,7 +418,7 @@ int main(int argc, char** argv)
   // simulation entry point
   // Start Kaifeng Xu
   // Load states
-  ooo_cpu[0]->bp_load_states(10000000);
+  // ooo_cpu[0]->bp_load_states(10000000);
   // End Kaifeng Xu
   while (std::any_of(std::begin(simulation_complete), std::end(simulation_complete), std::logical_not<uint8_t>())) {
 
