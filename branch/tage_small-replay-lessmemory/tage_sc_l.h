@@ -24,6 +24,7 @@
 #include <fstream>
 #include "ooo_cpu.h"
 #define NUM_STORED_ENTRY 4 // store several entries for insertion
+#include <map>
 // End of Kaifeng Xu
 
 
@@ -162,13 +163,18 @@ public:
   int8_t ctr;
   uint tag;
   int8_t u;
+  // Changed by Kaifeng Xu
+  int8_t is_prefetched;
+  int8_t is_used;
+  // End Kaifeng Xu
 
     gentry ()
   {
     ctr = 0;
     u = 0;
     tag = 0;
-
+    is_prefetched = 0;
+    is_used = 0;
 
   }
 };
@@ -318,7 +324,7 @@ class PREDICTOR
 {
 public:
   // Added by Kaifeng Xu
-  bool use_SC;
+  int use_SC;
   long long insn_count;
   int is_ld_st = 0; // 0 ld, st 1, no_st_ld 2
   int tmp_counter = 0;
@@ -329,6 +335,7 @@ public:
   std::ofstream f_miss_his;
   std::ifstream f_ld_miss_his;
   bool init_states_files = false; // Test if init finished
+  std::map<uint64_t, std::vector< std::array<uint, 5> > > prefetchTable;
   void load_table(long insn_count){
       return;
   }
@@ -350,68 +357,98 @@ public:
   void store_insn_breaker(){
       f_miss_his << std::dec << 1450 << "\n"; // some random number
   }
-  int tage_insertion(){
+  int tage_insertion(uint64_t PC){
     if(!init_states_files){
         f_ld_miss_his.open(bp_states_init_fname, std::ofstream::in);
         if (!f_ld_miss_his.is_open()) {
             std::cerr << "Error opening the miss history file: " << bp_states_init_fname  << std::endl;
         }
-          init_states_files = true;
-    }
-    // store old history values
-    int bank_idx[NUM_STORED_ENTRY];
-    int table_idx[NUM_STORED_ENTRY];
-    uint tag[NUM_STORED_ENTRY];
-    bool resolveDir[NUM_STORED_ENTRY];
-    for(int i = 0; i < NUM_STORED_ENTRY; i++) {
-        if(f_ld_miss_his.peek() == EOF) return 0;
-        f_ld_miss_his >> std::dec >> bank_idx[i];
-        // Check Insn breaker
-        // return 0 means not gonna continue
-        if(bank_idx[i] == 1450) {
-            if(i != 0){
-                std::cerr << "Error, should not find breaker when i != 0!" << std::endl;
-                std::cerr << bank_idx[i-1] << " " << table_idx[i-1] << " " << tag[i-1] << " " << resolveDir[i-1] << std::endl;
-            }
-            return 0;
+        while(!f_ld_miss_his.eof()){
+            uint64_t tmp_pc = 0;
+            f_ld_miss_his >> std::hex >> tmp_pc;
+            std::array<uint, 5> tmp_value;
+            f_ld_miss_his >> std::dec >> tmp_value[0] >> tmp_value[1] >> tmp_value[2] >> tmp_value[3] >> tmp_value[4];
+            prefetchTable[tmp_pc].push_back(tmp_value);
         }
-        if(f_ld_miss_his.peek() == EOF) return 0;
-        f_ld_miss_his >> std::dec >> table_idx[i];
-        f_ld_miss_his >> std::dec >> tag[i];
-        f_ld_miss_his >> resolveDir[i];
+        f_ld_miss_his.close();
+        init_states_files = true;
     }
-    // Tage insertion
-    int num_success = 0;// record number of successful insertion
-    int possible_evict_idx = -1;
-    // Always start at the last entry
-    for(int i = NUM_STORED_ENTRY-1 ; i >=0 ; i--){
-        if(tag[i] == gtable[bank_idx[i]][table_idx[i]].tag){
-            ctrupdate(gtable[bank_idx[i]][table_idx[i]].ctr, resolveDir[i], CWIDTH);
-            num_success ++;
-        } else if(gtable[bank_idx[i]][table_idx[i]].u == 0){
-            if(abs( 2 * gtable[bank_idx[i]][table_idx[i]].ctr + 1) <= 3){
-                gtable[bank_idx[i]][table_idx[i]].tag = tag[i];
-                gtable[bank_idx[i]][table_idx[i]].ctr = (resolveDir[i]) ? 0 : -1;
-                gtable[bank_idx[i]][table_idx[i]].u = 0;
-                num_success ++;
+    if(prefetchTable.find(PC) != prefetchTable.end()){
+        for( int i = 0; i < prefetchTable[PC].size(); i++ ){
+            int bank_idx = prefetchTable[PC][i][0];
+            int table_idx = prefetchTable[PC][i][1];
+            uint tmp_tag = prefetchTable[PC][i][2];
+            int tmp_taken = prefetchTable[PC][i][3];
+            if(bank_idx == NHIST) { // Temporary Implementation
+                if(tmp_tag == gtable[bank_idx][table_idx].tag){
+                    ctrupdate(gtable[bank_idx][table_idx].ctr, tmp_taken, CWIDTH);
+                } else {
+                    gtable[bank_idx][table_idx].tag = tmp_tag;
+                    gtable[bank_idx][table_idx].ctr = (tmp_taken) ? 0 : -1;
+                    gtable[bank_idx][table_idx].is_prefetched = 1;
+                    gtable[bank_idx][table_idx].u = 0;
+                }
             }
-            if(possible_evict_idx == -1) possible_evict_idx = i;
         }
-        if(num_success >= 1) break; // at most insert 2 entries
+        return 1;
     }
-    // If no entry is inserted, at least insert 1 entry
-    // if(num_success == 0){
-    //     if(possible_evict_idx >= 0){
-    //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].tag = tag[possible_evict_idx];
-    //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].ctr = (resolveDir[possible_evict_idx]) ? 0 : -1;
-    //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].u = 0;
-    //     } else { // if all inserting entries are conflict with entires that u > 0
-    //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].tag = tag[NUM_STORED_ENTRY-1];
-    //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].ctr = (resolveDir[NUM_STORED_ENTRY-1]) ? 0 : -1;
-    //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].u = 0;
-    //     }
-    // }
-    return 1;
+    return 0;
+
+    
+//     // store old history values
+//     int bank_idx[NUM_STORED_ENTRY];
+//     int table_idx[NUM_STORED_ENTRY];
+//     uint tag[NUM_STORED_ENTRY];
+//     bool resolveDir[NUM_STORED_ENTRY];
+//     for(int i = 0; i < NUM_STORED_ENTRY; i++) {
+//         if(f_ld_miss_his.peek() == EOF) return 0;
+//         f_ld_miss_his >> std::dec >> bank_idx[i];
+//         // Check Insn breaker
+//         // return 0 means not gonna continue
+//         if(bank_idx[i] == 1450) {
+//             if(i != 0){
+//                 std::cerr << "Error, should not find breaker when i != 0!" << std::endl;
+//                 std::cerr << bank_idx[i-1] << " " << table_idx[i-1] << " " << tag[i-1] << " " << resolveDir[i-1] << std::endl;
+//             }
+//             return 0;
+//         }
+//         if(f_ld_miss_his.peek() == EOF) return 0;
+//         f_ld_miss_his >> std::dec >> table_idx[i];
+//         f_ld_miss_his >> std::dec >> tag[i];
+//         f_ld_miss_his >> resolveDir[i];
+//     }
+//     // Tage insertion
+//     int num_success = 0;// record number of successful insertion
+//     int possible_evict_idx = -1;
+//     // Always start at the last entry
+//     for(int i = NUM_STORED_ENTRY-1 ; i >=0 ; i--){
+//         if(tag[i] == gtable[bank_idx[i]][table_idx[i]].tag){
+//             ctrupdate(gtable[bank_idx[i]][table_idx[i]].ctr, resolveDir[i], CWIDTH);
+//             num_success ++;
+//         } else if(gtable[bank_idx[i]][table_idx[i]].u == 0){
+//             if(abs( 2 * gtable[bank_idx[i]][table_idx[i]].ctr + 1) <= 3){
+//                 gtable[bank_idx[i]][table_idx[i]].tag = tag[i];
+//                 gtable[bank_idx[i]][table_idx[i]].ctr = (resolveDir[i]) ? 0 : -1;
+//                 gtable[bank_idx[i]][table_idx[i]].u = 0;
+//                 num_success ++;
+//             }
+//             if(possible_evict_idx == -1) possible_evict_idx = i;
+//         }
+//         if(num_success >= 1) break; // at most insert 2 entries
+//     }
+//     // If no entry is inserted, at least insert 1 entry
+//     // if(num_success == 0){
+//     //     if(possible_evict_idx >= 0){
+//     //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].tag = tag[possible_evict_idx];
+//     //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].ctr = (resolveDir[possible_evict_idx]) ? 0 : -1;
+//     //         gtable[bank_idx[possible_evict_idx]][table_idx[possible_evict_idx]].u = 0;
+//     //     } else { // if all inserting entries are conflict with entires that u > 0
+//     //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].tag = tag[NUM_STORED_ENTRY-1];
+//     //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].ctr = (resolveDir[NUM_STORED_ENTRY-1]) ? 0 : -1;
+//     //         gtable[bank_idx[NUM_STORED_ENTRY-1]][table_idx[NUM_STORED_ENTRY-1]].u = 0;
+//     //     }
+//     // }
+//    return 1;
   }
   // End of Kaifeng Xu
   int THRES;
@@ -964,7 +1001,9 @@ long long T_slhist[NTLOCAL];
   void Tagepred (uint64_t PC)
   {
     // Added by Kaifeng Xu
-    // std::cout << ch_i << " " << ch_t[0] << " " << ch_t[1] << std::endl;
+    if(is_ld_st == 0){
+        tage_insertion(PC);
+    }
     // End by Kaifeng Xu
     HitBank = 0;
     AltBank = 0;
@@ -1134,13 +1173,13 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
       {
 //Choser uses TAGE confidence and |LSUM|
         pred_taken = SCPRED;
-        use_SC = true;
+        use_SC = 1;
         if (HighConf)
           {
             if ((abs (LSUM) < THRES / 4))
               {
                 pred_taken = pred_inter;
-                use_SC = false;
+                use_SC = 0;
               }
 
             else if ((abs (LSUM) < THRES / 2)){
@@ -1159,6 +1198,12 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
       }
 
     // Added By Kaifeng Xu
+    if(HitBank >= NHIST - 1){
+        if(gtable[HitBank][GI[HitBank]].is_prefetched){
+            pred_taken = tage_pred;
+            use_SC = 2;
+        }
+    }
     // Add local history lookup
     // for(int i = 0; i < PPC_TABLE_ENTRY_NUM; i++){
     //     if(PPCTable.entries[i].pc == PC){
@@ -1310,12 +1355,19 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
         // Decide which component is used, using tage predictor
         char predict_component = 'T';
         if(LVALID && (WITHLOOP >= 0)) predict_component = 'L';
-        else if(use_SC) predict_component = 'S';
-        printf("ip %016llx %c %c %d %d\n", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir, HitBank);
-        // Update local hitory
-        // if(PPCTable_idx >= 0){
-        //     PPCTable.entries[PPCTable_idx].local_history = (PPCTable.entries[PPCTable_idx].local_history << 1) ^ resolveDir;
+        else if(use_SC == 1) predict_component = 'S';
+        else if(use_SC == 2) predict_component = 'P';
+        printf("ip %016llx %c %c %d %d ", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir, HitBank);
+        printf("%d %016llx %d %u %d %u\n", opType, branchTarget, GI[NHIST-1], GTAG[NHIST-1], GI[NHIST], GTAG[NHIST]);
+        // for(int i = 0; i < HISTBUFFERLENGTH ; i +=4 ){
+        //     int tmp_ptghist = ptghist - i - 1;
+        //     int hex_out = ghist[tmp_ptghist & (HISTBUFFERLENGTH - 1)] << 3;
+        //     hex_out ^= ghist[(tmp_ptghist - 1) & (HISTBUFFERLENGTH - 1)] << 2;
+        //     hex_out ^= ghist[(tmp_ptghist - 2) & (HISTBUFFERLENGTH - 1)] << 1;
+        //     hex_out ^= ghist[(tmp_ptghist - 3) & (HISTBUFFERLENGTH - 1)];
+        //     printf("%x", hex_out);
         // }
+        // printf("\n");
     } 
     // Tmp vars for storing the misses
     int num_stored = 0;
@@ -1493,6 +1545,7 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
                       {
                         gtable[i][GI[i]].tag = GTAG[i];
                         gtable[i][GI[i]].ctr = (resolveDir) ? 0 : -1;
+                        gtable[i][GI[i]].is_prefetched = 0;
                         if((is_ld_st == 1) && (num_stored < NUM_STORED_ENTRY)){
                             store_table(i, GI[i], GTAG[i], resolveDir);
                             num_stored++;
@@ -1545,6 +1598,7 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
                           {
                             gtable[i][GI[i]].tag = GTAG[i];
                             gtable[i][GI[i]].ctr = (resolveDir) ? 0 : -1;
+                            gtable[i][GI[i]].is_prefetched = 0;
                             if((is_ld_st == 1) && (num_stored < NUM_STORED_ENTRY)){
                                 store_table(i, GI[i], GTAG[i], resolveDir);
                                 num_stored++;
@@ -1650,43 +1704,44 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
                        phist, ptghist, ch_i, ch_t[0], ch_t[1]);
     }
 
-    // Store/Load Entries
-    if ((tage_pred != resolveDir) && is_update_his && (is_ld_st == 1)) {
-        if(num_stored < NUM_STORED_ENTRY) {
-            // No entry stored, then randomly store
-            int start_bank = (num_stored == 0) ? (NHIST/2 + 1) : (tmp_bank_idx + 1);
-            for(int I = start_bank; I < NHIST; I += 2 ){
-                int i = I + MYRANDOM() % 2;
-                if(NOSKIP[i]) {
-                    // store_table(tmp_bank_idx, tmp_table_idx, tmp_tag, resolveDir);
-                    store_table(i, GI[i], GTAG[i], resolveDir);
-                    num_stored ++;
-                }
-                if(num_stored >= NUM_STORED_ENTRY) break;
-            }
-            for(; num_stored < NUM_STORED_ENTRY; num_stored++){
-                int i = NHIST;
-                store_table(i, GI[i], GTAG[i], resolveDir);
-            }
-        }
-    }
-    if(num_stored != 0 && num_stored != NUM_STORED_ENTRY){
-        std::cerr << "Invalid Number of stored entries:"<< num_stored << "ALLOC: " << ALLOC << endl;
-    }
-    // tmp counter
-    if (is_update_his && continue_prefetch){
-        if(is_ld_st == 0) {
-            for( ; continue_prefetch ; ){
-                continue_prefetch = tage_insertion();
-            }
-        }
-    }
-    if (is_update_his) tmp_counter ++;
-    if (tmp_counter % 1000 == 0){
-        continue_prefetch = true;
-        if((is_ld_st == 1) && (tmp_counter >= 10000)) store_insn_breaker();
-    }
-    // End of Kaifeng Xu
+//     // Start of Kaifeng Xu
+//     // Store/Load Entries
+//     if ((tage_pred != resolveDir) && is_update_his && (is_ld_st == 1)) {
+//         if(num_stored < NUM_STORED_ENTRY) {
+//             // No entry stored, then randomly store
+//             int start_bank = (num_stored == 0) ? (NHIST/2 + 1) : (tmp_bank_idx + 1);
+//             for(int I = start_bank; I < NHIST; I += 2 ){
+//                 int i = I + MYRANDOM() % 2;
+//                 if(NOSKIP[i]) {
+//                     // store_table(tmp_bank_idx, tmp_table_idx, tmp_tag, resolveDir);
+//                     store_table(i, GI[i], GTAG[i], resolveDir);
+//                     num_stored ++;
+//                 }
+//                 if(num_stored >= NUM_STORED_ENTRY) break;
+//             }
+//             for(; num_stored < NUM_STORED_ENTRY; num_stored++){
+//                 int i = NHIST;
+//                 store_table(i, GI[i], GTAG[i], resolveDir);
+//             }
+//         }
+//     }
+//     if(num_stored != 0 && num_stored != NUM_STORED_ENTRY){
+//         std::cerr << "Invalid Number of stored entries:"<< num_stored << "ALLOC: " << ALLOC << endl;
+//     }
+//     // tmp counter
+//     if (is_update_his && continue_prefetch){
+//         if(is_ld_st == 0) {
+//             for( ; continue_prefetch ; ){
+//                 continue_prefetch = tage_insertion();
+//             }
+//         }
+//     }
+//     if (is_update_his) tmp_counter ++;
+//     if (tmp_counter % 1000 == 0){
+//         continue_prefetch = true;
+//         if((is_ld_st == 1) && (tmp_counter >= 10000)) store_insn_breaker();
+//     }
+//     // End of Kaifeng Xu
 
 //END PREDICTOR UPDATE
 

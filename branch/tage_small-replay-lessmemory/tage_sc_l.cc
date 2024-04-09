@@ -4,6 +4,7 @@
 
 #include "tage_sc_l.h"
 #include <ooo_cpu.h>
+#include <map>
 
 // bool tage_sc_l::predict_branch(uint64_t pc){
 //     bool prediction = tage.GetPrediction(pc);
