@@ -212,7 +212,7 @@ void O3_CPU::init_instruction(ooo_model_instr arch_instr)
     // Changed by Kaifeng Xu
     // uint8_t branch_prediction = impl_predict_branch(arch_instr.ip, predicted_branch_target, always_taken, arch_instr.branch_type);
     uint64_t asid = arch_instr.asid[0] | (arch_instr.asid[1] << 8);
-    uint8_t branch_prediction = impl_predict_branch(asid, arch_instr.ip, predicted_branch_target, always_taken, arch_instr.branch_type);
+    uint8_t branch_prediction = impl_predict_branch(arch_instr.ip, predicted_branch_target, always_taken, arch_instr.branch_type);
     // printf("asid: %d\n", asid);
     // End: Kaifeng Xu
     if ((branch_prediction == 0) && (always_taken == 0)) {
@@ -246,7 +246,7 @@ void O3_CPU::init_instruction(ooo_model_instr arch_instr)
     }
 
     impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
-    impl_last_branch_result(asid, arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
+    impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch_type);
   }
 
   arch_instr.event_cycle = current_cycle;
