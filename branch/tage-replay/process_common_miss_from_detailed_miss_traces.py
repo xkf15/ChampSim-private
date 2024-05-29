@@ -1,65 +1,15 @@
 import os
 f_dir = "/scratch/gpfs/kaifengx/function_bench_results/"
-f_prefix = "nokvm-2024-04-1"
-# f_prefix = "nokvm-2024-03"
-# bench = "chameleon_short.trace_detailed_misses_reasons_his_tagesmall_base.out"
-# bench = "rnnserving"
-# bench = "imageprocessing"
-# bench = "chameleon"
-# bench = "videoprocessing"
-# bench = "floatoperation"
-# bench = "matmul"
-# bench = "linpack"
-# bench = "pyaes"
-# bench = "modelserving"
-bench = "modeltraining"
-f_suffix = "detailed_misses_reasons_his_tagesmall_base.out"
+bench = "chameleon_short.trace_detailed_misses_reasons_tageonly_base.out"
 
 fnames = []
 for fn in os.listdir(f_dir):
-    if f_prefix in fn and bench in fn and f_suffix in fn:
+    if bench in fn:
         fnames.append(f_dir + fn)
-for fn in os.listdir(f_dir):
-    if "nokvm-2023-11-2" in fn and bench in fn and f_suffix in fn:
-        fnames.append(f_dir + fn)
-# fnames.reverse()
-print(fnames)
-# exit()
 
 
 f_cnt = 0
 his_len = 1024
-for fn in fnames:
-    with open(fn, "r") as f_br:
-        print("Start File " + str(f_cnt))
-        fn_o = "miss_trace_real_" + bench + str(f_cnt) + ".txt"
-        if fn_o in os.listdir("./"):
-            print("File " + str(f_cnt) + " Exists")
-            # just generate once
-            continue
-        f_miss_trace = open(fn_o, "w")
-        f_cnt += 1
-        insn_cnt = 0
-        for line in f_br:
-            tokens = line.split()
-            if "Heartbeat CPU 0" in line:
-                insn_cnt = int(tokens[4])
-                continue
-            if len(tokens) < 9:
-                continue
-            if tokens[0] == "ip":
-                pc = int(tokens[1], 16)
-            else:
-                continue
-            if tokens[3] == 'M':
-                # phist = '21_' + tokens[8] + '_' + tokens[9]
-                # f_miss_trace.write(hex(pc))
-                # f_miss_trace.write(' ' + phist + ' ' + tokens[4] + ' ' + str(insn_cnt) + '\n')
-                phist = '22_' + tokens[10] + '_' + tokens[11]
-                f_miss_trace.write(hex(pc))
-                f_miss_trace.write(' ' + phist + ' ' + tokens[4] + ' ' + str(insn_cnt) + '\n')
-
-
 # for fn in fnames:
 #     with open(fn, "r") as f_br:
 #         print("Start File " + str(f_cnt))
@@ -103,8 +53,7 @@ for fn in fnames:
 # 
 
 pc_his_list_all = []
-pc_his_all = {} # (pc, his) to [taken, not taken]
-pc_all = {} # use this to remove all data dependent pc
+pc_his_all = {}
 def preprocess_all_common_miss(f_trace):
     trace1 = {}
     with open(f_trace, "r") as f_miss_trace:
@@ -114,22 +63,9 @@ def preprocess_all_common_miss(f_trace):
                 continue
             trace1[(tokens[0], tokens[1])] = tokens[2]
             if (tokens[0], tokens[1]) not in pc_his_all:
-                if tokens[2] == '1':
-                    pc_his_all[(tokens[0], tokens[1])] = [1, 0]
-                else:
-                    pc_his_all[(tokens[0], tokens[1])] = [0, 1]
-                pc = tokens[0]
-                if pc not in pc_all: # check how many unique PCs
-                    pc_all[pc] = 1
-                else:
-                    pc_all[pc] += 1
-            else:
-                if tokens[2] == '1':
-                    pc_his_all[(tokens[0], tokens[1])][0] += 1
-                else:
-                    pc_his_all[(tokens[0], tokens[1])][1] += 1
+                pc_his_all[(tokens[0], tokens[1])] = tokens[2]
     pc_his_list_all.append(trace1)
-    print("Finish preprocessing a trace")
+    print("Finish a Trace")
 
 
 def find_common_miss(f_trace1_i, f_trace2_i, f_common_o):
@@ -174,27 +110,20 @@ def find_common_miss(f_trace1_i, f_trace2_i, f_common_o):
     # pc_trace_common.close()
     print("Miss num:", line_cnt, "Matched:", matched, "Correct:", correct)
         
-for i in range(len(fnames) - 1):
-    preprocess_all_common_miss("miss_trace_real_" + bench + str(i) + ".txt")
+for i in range(len(fnames)):
+    preprocess_all_common_miss("miss_trace" + str(i) + ".txt")
 
 common = 0
 common_tuple = {}
 for key in pc_his_all:
-    (pc_tmp, his_tmp) = key
     find_cnt = 0
     for pc_his_dic in pc_his_list_all:
         if key in pc_his_dic:
             find_cnt += 1
     if find_cnt > 2:
-        # if pc_tmp in pc_all: # remove data dependent branch
-        #     if pc_all[pc_tmp] > 512:
-        #         continue
-        significant_taken = pc_his_all[key][0] * 1.0 / (pc_his_all[key][0] + pc_his_all[key][1]) - 0.5
-        if significant_taken < 0.8 and significant_taken > 0.2:
-            continue # remove data dependent branch
         common += 1
-        common_tuple[key] = [significant_taken, -1] # 0: percentage taken, 1: smallest insn count that this showsup
-        # common_tuple[key] = [0, -1]
+        # common_tuple[key] = [pc_his_all[key], -1]
+        common_tuple[key] = [0, -1]
 print("All common:", common)
 
 
@@ -206,7 +135,7 @@ for i in range(len(fnames)):
     line_cnt = 0
     correct = 0
     if_matched = False
-    with open("miss_trace_real_" + bench + str(i) + ".txt", "r") as f_miss_trace:
+    with open("miss_trace" + str(i) + ".txt", "r") as f_miss_trace:
         for line in f_miss_trace:
             tokens = line.split()
             if len(tokens) < 3:
@@ -218,13 +147,13 @@ for i in range(len(fnames)):
                 if_matched = True
                 if (int(tokens[2]) - 0.5) * common_tuple[pc_his][0] > 0:
                     correct += 1
-                # # Test if this is a new place to insert entry
+                # Test if this is a new place to insert entry
                 if common_tuple[pc_his][1] < 0 or common_tuple[pc_his][1] > int(tokens[3]):
-                    # # if taken +1, else -1
-                    # if int(tokens[2]) > 0:
-                    #     common_tuple[pc_his][0] += 1
-                    # else:
-                    #     common_tuple[pc_his][0] -= 1
+                    # if taken +1, else -1
+                    if int(tokens[2]) > 0:
+                        common_tuple[pc_his][0] += 1
+                    else:
+                        common_tuple[pc_his][0] -= 1
                     common_tuple[pc_his][1] = int(tokens[3])
             line_cnt += 1
             # if line_cnt % 10000 == 0:
@@ -243,15 +172,15 @@ def custom_sort_insn(item):
 def write2file():
     # prefetch all misses when PC is reached
     sorted_dict_1 = dict(sorted(common_tuple.items(), key=lambda x: custom_sort_pc_insn(x)))
-    f_trace_o = "pc_his_common_miss_real_trace_" + bench + ".txt"
+    f_trace_o = "pc_his_common_miss_trace.txt"
     pc_his_common = open(f_trace_o + "tmp", "w")
     count = 0
     for key, value in sorted_dict_1.items():
         pc, his = key
         [t_nt, insn_cnt] = value
         # print(insn_cnt)
-        # if abs(t_nt) <= 2:
-        #     continue
+        if abs(t_nt) <= 1:
+            continue
         if t_nt >= 0:
             t_nt = '1'
         else:
@@ -294,8 +223,7 @@ def write2file():
     for key, value in sorted_dict_2.items():
         pc, his = key
         [t_nt, insn_cnt] = value
-        tokens_his = his.split('_') # 0: bank id, 1: index, 2: tag
-        pc_his_common_2.write(pc + ' ' + tokens_his[0] + ' ' + tokens_his[1] + ' ' + tokens_his[2]  + ' ' + t_nt + ' ' + str(insn_cnt) + '\n')
+        pc_his_common_2.write(pc + ' ' + his + ' ' + t_nt + ' ' + str(insn_cnt) + '\n')
         # if count < 10:
         #     print(key, value)
         #     count += 1

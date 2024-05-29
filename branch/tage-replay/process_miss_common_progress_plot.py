@@ -6,7 +6,7 @@ import os
 
 # bench_labels = ["chameleon", "floatoperation", "linpack", "rnnserving","videoprocessing",
 #                 "matmul", "pyaes", "imageprocessing", "modelserving", "modeltraining"]
-bench_labels = ["imageprocessing"]
+bench_labels = ["chameleon"]
 # for his_len in [128, 256, 512, 1024]:
 common_miss_all_list = []
 for his_len in [128, 256, 512, 1024]:
@@ -39,7 +39,10 @@ for his_len in [128, 256, 512, 1024]:
             bench_round += 1
             with open(fn, "r") as f_misses:
                 line_cnt = 0
-                period_idx = 0 # the index of current period
+                if bench_round > 1:
+                    period_idx = 0 # initialized to other value if want to do corelation study
+                else:
+                    period_idx = 0 # the index of current period
                 init_miss = 0
                 init_miss_t = 0
                 init_miss_l = 0
@@ -113,18 +116,18 @@ for his_len in [128, 256, 512, 1024]:
                         line_cnt += 1
                         # Init entry or update number
                         phist = ghist
-                        if (pc, phist) in br_pc_list[0]:
+                        if (pc, phist) in br_pc_list[period_idx]:
                             matched_pc_his = True
-                            br_pc_list[0][(pc, phist)]["num"] += 1
+                            br_pc_list[period_idx][(pc, phist)]["num"] += 1
                             same_pc_his += 1
                             if tokens[3] == 'M':
                                 same_pc_his_miss += 1
-                            if tokens[4] != br_pc_list[0][(pc, phist)]["last_outcome"]:
+                            if tokens[4] != br_pc_list[period_idx][(pc, phist)]["last_outcome"]:
                                 diff_than_prev += 1
                         else:
                             matched_pc_his = False
                             unique_pc_his += 1
-                            br_pc_list[0][(pc, phist)] = {"num": 1, "miss": 0, "hit": 0, "T": 0, "NT": 0, 
+                            br_pc_list[period_idx][(pc, phist)] = {"num": 1, "miss": 0, "hit": 0, "T": 0, "NT": 0, 
                                     "h_t": 0, "m_t": 0, "h_l": 0, "m_l": 0, "h_s": 0, "m_s": 0, "last_outcome": tokens[4]}
                             if tokens[3] == 'M':
                                 init_miss += 1
@@ -173,7 +176,7 @@ for his_len in [128, 256, 512, 1024]:
                                 period_idx += 1
                                 if period_idx >= len(br_pc_list):
                                     break
-                                # br_pc = br_pc_list[period_idx]
+                                br_pc = br_pc_list[period_idx]
                             if insn_cnt >= end_insn:
                                 break
                         if len(tokens) < 5:
@@ -238,7 +241,7 @@ handles, labels = axs.get_legend_handles_labels()
 plt.subplots_adjust(top=0.80, bottom=0.1, left=0.095, right=0.985, hspace=0.2, wspace=0.2)
 fig.legend(handles, labels, loc='upper right', ncol=2)
 
-fig.savefig("Miss_common_progress_whole_" + bench_labels[0] + ".png")
+fig.savefig("Miss_common_progress_conv0_" + bench_labels[0] + ".png")
 plt.show()
 #    x_bar_pos = np.array([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5])
 #    # colors = ['cornflowerblue', 'coral', 'limegreen', 'darkviolet']

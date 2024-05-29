@@ -319,12 +319,42 @@ public:
 
 // End of Kaifeng Xu
 
+// Kaifeng Xu
+bool sortByPC(const array<uint64_t, 5> buf1, const array<uint64_t, 5> buf2){
+    if(buf1[0] != buf2[0]){
+        return buf1[0] < buf2[0];;
+    } else {
+        if(buf1[1] != buf2[1]){
+            return buf1[1] < buf2[1];
+        } else {
+            if(buf1[2] != buf2[2]){
+                return buf1[2] < buf2[2];
+            } else {
+                if(buf1[3] != buf2[3]){
+                    return buf1[3] < buf2[3];
+                } else {
+                    if(buf1[4] != buf2[4]){
+                        return buf1[4] < buf2[4];
+                    }
+                }
+            }
+        }
+    }
+    return buf1[0] <= buf2[0];
+}
+// uint64_t compareByPC(const std::vector<std::array<uint64_t, 4>>::iterator it, uint64_t PC){
+// uint64_t compareByPC(const <std::array<uint64_t, 4>> it, uint64_t PC){
+//     return  it[0][0] > PC;
+// }
+// End Kaifeng Xu
 
 class PREDICTOR
 {
 public:
   // Added by Kaifeng Xu
   int use_SC;
+  int insert_taken = -1;
+  int tage_sc_l_taken = -1;
   long long insn_count;
   int is_ld_st = 0; // 0 ld, st 1, no_st_ld 2
   int tmp_counter = 0;
@@ -335,7 +365,15 @@ public:
   std::ofstream f_miss_his;
   std::ifstream f_ld_miss_his;
   bool init_states_files = false; // Test if init finished
-  std::map<uint64_t, std::vector< std::array<uint, 5> > > prefetchTable;
+  std::map<uint64_t, std::vector< std::array<uint, 6> > > prefetchTable; // Table read from file
+  std::vector<std::array<uint64_t, 5>> prefetchBuffer; // real table to use for branch predictor
+  int prefetchTable_idx = -1; // for history update
+  int prefetchBuffer_idx = -1; // for history update
+  int prefetch_useful = 0; // if use this results
+  uint64_t bufferPCHead = 0;
+  uint64_t bufferHead_ptr = 0;
+  uint64_t bufferPCTail = 0;
+  uint64_t bufferTail_ptr = 0;
   void load_table(long insn_count){
       return;
   }
@@ -366,33 +404,147 @@ public:
         while(!f_ld_miss_his.eof()){
             uint64_t tmp_pc = 0;
             f_ld_miss_his >> std::hex >> tmp_pc;
-            std::array<uint, 5> tmp_value;
+            std::array<uint, 6> tmp_value;
             f_ld_miss_his >> std::dec >> tmp_value[0] >> tmp_value[1] >> tmp_value[2] >> tmp_value[3] >> tmp_value[4];
+            tmp_value[5] = 3; // usefulness counter
             prefetchTable[tmp_pc].push_back(tmp_value);
+            if(tmp_value[0] == NHIST){
+                std::array<uint64_t, 5> tmp_buffer;
+                tmp_buffer[0] = tmp_pc;
+                tmp_buffer[1] = tmp_value[1]; // hash 1
+                tmp_buffer[2] = tmp_value[2]; // hash 2
+                tmp_buffer[3] = tmp_value[3]; // taken
+                tmp_buffer[4] = 3;
+                prefetchBuffer.push_back(tmp_buffer);
+            }
+            // printf("%016llx %u %u %u %u %u\n", tmp_pc, prefetchTable[tmp_pc].back()[0], prefetchTable[tmp_pc].back()[1], prefetchTable[tmp_pc].back()[2], prefetchTable[tmp_pc].back()[3], prefetchTable[tmp_pc].back()[4]);
         }
+        printf("Total Prefetch Info Size: %d\n", prefetchBuffer.size());
+        fflush(stdout);
+        std::sort(prefetchBuffer.begin(), prefetchBuffer.end(), sortByPC);
+        for(int i = 0; i < prefetchBuffer.size(); i++){
+            printf("%016llx %u %u %u\n", prefetchBuffer[i][0], prefetchBuffer[i][1], prefetchBuffer[i][2], prefetchBuffer[i][3]);
+        }
+        fflush(stdout);
         f_ld_miss_his.close();
         init_states_files = true;
     }
-    if(prefetchTable.find(PC) != prefetchTable.end()){
-        for( int i = 0; i < prefetchTable[PC].size(); i++ ){
-            int bank_idx = prefetchTable[PC][i][0];
-            int table_idx = prefetchTable[PC][i][1];
-            uint tmp_tag = prefetchTable[PC][i][2];
-            int tmp_taken = prefetchTable[PC][i][3];
-            if(bank_idx == NHIST) { // Temporary Implementation
-                if(tmp_tag == gtable[bank_idx][table_idx].tag){
-                    ctrupdate(gtable[bank_idx][table_idx].ctr, tmp_taken, CWIDTH);
-                } else {
-                    gtable[bank_idx][table_idx].tag = tmp_tag;
-                    gtable[bank_idx][table_idx].ctr = (tmp_taken) ? 0 : -1;
-                    gtable[bank_idx][table_idx].is_prefetched = 1;
-                    gtable[bank_idx][table_idx].u = 0;
-                }
-            }
+
+    // Check if hit in prefetchBuffer
+    prefetchBuffer_idx = -1;
+    insert_taken = -1; // -1 not decided, 0 not taken, 1 taken
+    if((PC >= bufferPCHead) && (PC <= bufferPCTail)){
+        for(int i = bufferHead_ptr; i < bufferTail_ptr; i++){
+        // for(int i = 0; i < prefetchBuffer.size(); i++){
+            // if(PC == prefetchBuffer[i][0]){
+                 if((prefetchBuffer[i][0] & 0xff) == (PC & 0xff)){
+                    if( (prefetchBuffer[i][1] == GI[NHIST]) && (prefetchBuffer[i][2] == GTAG[NHIST])){
+                        insert_taken = prefetchBuffer[i][3];
+                        prefetchBuffer_idx = i;
+                        prefetch_useful = (prefetchBuffer[i][4] >= 3);
+                        break;
+                    }
+                 }
+            // }
         }
-        return 1;
+
     }
-    return 0;
+
+    // Update prefetchBuffer
+    // if PC is in range(bufferPCHead, bufferPCTail), do not update
+    if((PC <= bufferPCHead) || (PC >= bufferPCTail)){
+        // prefetchTable.lowerbound(PC);
+        // for(auto it = prefetchTable.begin(); it != prefetchTable.end(); ++it){
+        //     if(prefetchBuffer.size() < 1024){
+        //         std::array<uint, 2> tmp_hash;
+        //         prefetchBuffer.push_back(tmp_hash);
+        //     }
+        // }
+        std::vector<std::array<uint64_t, 5>>::iterator newHead;
+        std::array<uint64_t, 5> tmp_PCarray;
+        tmp_PCarray[0] = PC;
+        tmp_PCarray[1] = tmp_PCarray[2] = tmp_PCarray[3] = tmp_PCarray[4] = 0;
+        newHead = std::lower_bound(prefetchBuffer.begin(), prefetchBuffer.end(), tmp_PCarray, sortByPC);
+        if(newHead != prefetchBuffer.end()){
+            bufferPCHead = newHead[0][0];
+            bufferHead_ptr = newHead - prefetchBuffer.begin();
+            if(bufferHead_ptr <= 128){
+                newHead = prefetchBuffer.begin();
+                bufferPCHead = newHead[0][0];
+                bufferHead_ptr = 0;
+            } else {
+                newHead -= 128;
+                bufferPCHead = newHead[0][0];
+                bufferHead_ptr -= 128;
+            }
+            if((prefetchBuffer.end() - newHead) <= 1024){
+                bufferPCTail = (prefetchBuffer.back())[0];
+                bufferTail_ptr = prefetchBuffer.size() - 1;
+            } else {
+                bufferPCTail = (newHead + 1024)[0][0];
+                bufferTail_ptr = bufferHead_ptr + 1024;
+            }
+        } else {
+            ; // no change
+        }
+        printf("bufferHead_ptr: %d bufferTail_ptr: %d\n", bufferHead_ptr, bufferTail_ptr); // buffer Head moved
+    }
+
+    // Check if hit in prefetchTable
+    // prefetchTable_idx = -1;
+    // bool hit_in_prefetchTable = false;
+    // if(prefetchTable.find(PC) != prefetchTable.end()){
+    //     for( int i = 0; i < prefetchTable[PC].size(); i++ ){
+    //         int bank_idx = prefetchTable[PC][i][0];
+    //         int table_idx = prefetchTable[PC][i][1];
+    //         uint tmp_tag = prefetchTable[PC][i][2];
+    //         int tmp_taken = prefetchTable[PC][i][3];
+    //         if(bank_idx == NHIST) { // Temporary Implementation
+    //             if((table_idx == GI[bank_idx]) && (tmp_tag == GTAG[bank_idx])){
+    //                 hit_in_prefetchTable = true;
+    //                 insert_taken = prefetchTable[PC][i][3];
+    //                 prefetchTable_idx = i;
+    //                 prefetch_useful = (prefetchTable[PC][i][5] >= 3);
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // }
+    // if(hit_in_prefetchTable){
+    //     printf("bufferPCHead: %llx PC: %llx, bufferPCTail: %llx\n", bufferPCHead, PC, bufferPCTail);
+    //     printf("bufferHead_ptr: %d bufferTail_ptr: %d\n", bufferHead_ptr, bufferTail_ptr);
+    //     fflush(stdout);
+    // }
+    return insert_taken;
+
+    //#### insert_taken = -1; // -1 not decided, 0 not taken, 1 taken
+    //#### if(prefetchTable.find(PC) != prefetchTable.end()){
+    //####     for( int i = 0; i < prefetchTable[PC].size(); i++ ){
+    //####         // if((PC == 0xffffffffbb7cb672) && (prefetchTable[PC][i][0] == 22)){
+    //####         //     printf("%016llx %u %u %u %u\n", PC, prefetchTable[PC][i][0], prefetchTable[PC][i][1], prefetchTable[PC][i][2], prefetchTable[PC][i][3]);
+    //####         // }
+    //####         int bank_idx = prefetchTable[PC][i][0];
+    //####         int table_idx = prefetchTable[PC][i][1];
+    //####         uint tmp_tag = prefetchTable[PC][i][2];
+    //####         int tmp_taken = prefetchTable[PC][i][3];
+    //####         if(bank_idx == NHIST) { // Temporary Implementation
+    //####             if((table_idx == GI[bank_idx]) && (tmp_tag == GTAG[bank_idx])){
+    //####                 insert_taken = tmp_taken;
+    //####                 // Do the prefetch if and only if index and tag both matched
+    //####                 if(tmp_tag == gtable[bank_idx][table_idx].tag){
+    //####                     ctrupdate(gtable[bank_idx][table_idx].ctr, tmp_taken, CWIDTH);
+    //####                 } else {
+    //####                     gtable[bank_idx][table_idx].tag = tmp_tag;
+    //####                     gtable[bank_idx][table_idx].ctr = (tmp_taken) ? 0 : -1;
+    //####                     gtable[bank_idx][table_idx].is_prefetched = 1;
+    //####                     gtable[bank_idx][table_idx].u = 0;
+    //####                 }
+    //####                 return insert_taken;
+    //####             }
+    //####         }
+    //####     }
+    //#### }
+    //#### return insert_taken;
 
     
 //     // store old history values
@@ -1000,11 +1152,6 @@ long long T_slhist[NTLOCAL];
   //  TAGE PREDICTION: same code at fetch or retire time but the index and tags must recomputed
   void Tagepred (uint64_t PC)
   {
-    // Added by Kaifeng Xu
-    if(is_ld_st == 0){
-        tage_insertion(PC);
-    }
-    // End by Kaifeng Xu
     HitBank = 0;
     AltBank = 0;
     for (int i = 1; i <= NHIST; i += 2)
@@ -1034,6 +1181,11 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
           T = T % NBANKLOW;
 
         }
+    // Added by Kaifeng Xu
+    if(is_ld_st == 0){
+        tage_insertion(PC);
+    }
+    // End by Kaifeng Xu
 //just do not forget most address are aligned on 4 bytes
     BI = (PC ^ (PC >> 2)) & ((1 << LOGB) - 1);
 
@@ -1103,7 +1255,10 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
   bool GetPrediction (uint64_t PC)
   {
 // computes the TAGE table addresses and the partial tags
-
+//
+    // Added by Kaifeng Xu
+    use_SC = 0;
+    // End Kaifeng XU
 
     Tagepred (PC);
     pred_taken = tage_pred;
@@ -1198,11 +1353,16 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
       }
 
     // Added By Kaifeng Xu
-    if(HitBank >= NHIST - 1){
-        if(gtable[HitBank][GI[HitBank]].is_prefetched){
-            pred_taken = tage_pred;
-            use_SC = 2;
-        }
+    // if(HitBank >= NHIST - 1){
+    //     if(gtable[HitBank][GI[HitBank]].is_prefetched){
+    //         pred_taken = tage_pred;
+    //         use_SC = 2;
+    //     }
+    // }
+    tage_sc_l_taken = pred_taken; // Sotre tage_sc_l prediction, may use TAGE prefetched prediction
+    if((insert_taken >= 0) && (prefetch_useful > 0)){
+        pred_taken = insert_taken;
+        use_SC = 2;
     }
     // Add local history lookup
     // for(int i = 0; i < PPC_TABLE_ENTRY_NUM; i++){
@@ -1368,6 +1528,39 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
         //     printf("%x", hex_out);
         // }
         // printf("\n");
+        // Update usefulness in prefetchBuffer/Table
+        if(insert_taken >= 0) {
+            if(resolveDir == insert_taken){
+                if(prefetchBuffer_idx >= 0) {
+                    prefetchBuffer[prefetchBuffer_idx][4] += 1;
+                    if(prefetchBuffer[prefetchBuffer_idx][4] >= 6){
+                        prefetchBuffer[prefetchBuffer_idx][4] = 6;
+                    }
+                }
+                if(prefetchTable_idx >= 0) {
+                    prefetchTable[PC][prefetchTable_idx][5] += 1;
+                    if(prefetchTable[PC][prefetchTable_idx][5] >= 6){
+                        prefetchTable[PC][prefetchTable_idx][5] = 6;
+                    }
+                }
+            } else {
+                if(prefetchBuffer_idx >= 0) {
+                    if(prefetchBuffer[prefetchBuffer_idx][4] <= 1){
+                        prefetchBuffer[prefetchBuffer_idx][4] = 0;
+                    } else {
+                        prefetchBuffer[prefetchBuffer_idx][4] -= 1;
+                    }
+                }
+                if(prefetchTable_idx >= 0) {
+                    if(prefetchTable[PC][prefetchTable_idx][5] <= 1){
+                        prefetchTable[PC][prefetchTable_idx][5] = 0;
+                    } else {
+                        prefetchTable[PC][prefetchTable_idx][5] -=1;
+                    }
+                }
+            }
+        }
+        pred_taken = tage_sc_l_taken; // restore tage_sc_l prediction
     } 
     // Tmp vars for storing the misses
     int num_stored = 0;

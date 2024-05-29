@@ -1572,8 +1572,7 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 
             H[i].update (ghist, Y);
             G[i].update (ghist, Y);
-            J[i].update (ghist, Y);
-
+            J[i].update (ghist, Y); 
 
           }
       }
@@ -1595,7 +1594,16 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
         char predict_component = 'T';
         if(LVALID && (WITHLOOP >= 0)) predict_component = 'L';
         else if(use_SC) predict_component = 'S';
-        printf("ip %016llx %c %c %d %d\n", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir, HitBank);
+        printf("ip %016llx %c %c %d %d ", PC, predict_component, ((resolveDir == pred_taken) ? 'H': 'M'), resolveDir, HitBank);
+        printf("%016llx ", branchTarget)
+        for(int i = HISTBUFFERLENGTH-1; i >=0 ; i--){
+            if(ghist[i] > 0){
+                printf("1");
+            } else {
+                printf("0");
+            }
+        }
+        printf(" %d\n", ptghist);
         // Update local hitory
         // if(PPCTable_idx >= 0){
         //     PPCTable.entries[PPCTable_idx].local_history = (PPCTable.entries[PPCTable_idx].local_history << 1) ^ resolveDir;

@@ -1,0 +1,10 @@
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_15-01-09-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_15-14-05-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_15-25-08-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_15-42-49-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_16-32-41-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_16-52-26-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_17-24-36-chameleon_short.trace
+sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh nokvm-2024-03-26_-_17-34-33-chameleon_short.trace
+# sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh 
+# sbatch champsim-slurm-qemutrace_tage-only-replay-lessmemory_detailed_missess.sh 
